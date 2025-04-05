@@ -5,14 +5,14 @@
 This model has animatronic and can be controlled via a button on the bottom. The LEDs, servos and sound module are controlled by an Arduino Nano. As there is already a lot to control, all the outputs of the Arduino Nano are used. This leaves no room for expansion.
 
 But there is a solution: a second microcontroller.
-In Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented with a second Arduino Nano. I also wanted to implement this mod for the Flying Delorean. I also had the idea of using an ESP8266 to control the Arduino. So the idea for this project “ESP Flying Deloren” was born.
+For Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented by [Craig Hancock](https://www.facebook.com/share/p/18tshCDeAy/), with a second Arduino Nano. I also wanted to implement this mod for the Flying Delorean. And I had the idea of using an ESP8266 with Wifi, to control the Arduino. So the idea for this project “ESP Flying Deloren” was born.
 
 **Functions**
 - Wifi connection with website for control 
 - Switching the Delorean on/off
-- EQ LED mod for the status indicator
 - Changing the scenes
 - Changing the mode
+- EQ LED mod for the status indicator
 - Communication via MQTT (with Home Assistant Discovery Support)
 
 **Circut**
