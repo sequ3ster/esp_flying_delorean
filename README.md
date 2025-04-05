@@ -19,7 +19,7 @@ For Didier's first Delorean model, an EQ LED panel MOD for the status indicator 
 <img src="/images/circuit_diagram.png" width="300">
 
 **Screenshots**
-<img src="/images/Screenshot_20250405_155759_Chrome.jpg" width="300">
+<img src="/images/Screenshot_20250405_155759_Chrome.jpg" height="300">
 
 **Hardware**
 - <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
