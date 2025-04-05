@@ -22,7 +22,7 @@ For Didier's first Delorean model, an EQ LED panel MOD for the status indicator 
 <br><img src="/images/Screenshot_20250405_155759_Chrome.jpg" height="300">
 
 **Hardware**
-- <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
+- <img src="/images/D1MiniNodeMCU.png" height="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
 - <img src="/images/AdafruitCharliePlex.jpg" width="300"><br>[Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White](https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss)
 - 1x 1k ohm 1/4 watt Resistor
 - 1x 180K ohm 1/4 watt Resistor
