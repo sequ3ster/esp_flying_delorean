@@ -17,6 +17,7 @@
   ESP8266 Board: http://arduino.esp8266.com/stable/package_esp8266com_index.json
   File: https://42project.net/esp8266-webserverinhalte-wie-bilder-png-und-jpeg-aus-dem-internen-flash-speicher-laden/
   Flash: https://espressif.github.io/esptool-js/
+  MQTT Youtube: https://www.youtube.com/watch?v=n9QXRcFqbLY
 *********/
 
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
@@ -34,7 +35,7 @@
 #endif
 
 // Set web server port number to 80
-ESP8266WebServer server(80);
+const unsigned int port = 80;
 
 // LED Debug Options. Please select only one. For deactivate the LED, set all debug variables to false.
 bool debugPower = false;
@@ -52,6 +53,8 @@ char mqtt_password[40];
 // Please do not change anything from here on
 // --------------------------------------------------------------
 Adafruit_IS31FL3731_Wing matrix = Adafruit_IS31FL3731_Wing();
+
+ESP8266WebServer server(port);
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -78,6 +81,7 @@ bool StatusIndicatorState = HIGH;
 bool DeloreanIsFlying = false; 
 bool LastDeloreanIsFlying = false; 
 int ServoValue = 0; 
+int LastServoValue = 0; 
 
 // --- MQTT Device ---
 String mac = WiFi.macAddress(); // Eindeutige Basis für IDs
@@ -88,6 +92,7 @@ String deviceName = "Flying Delorean";
 String motionConfigTopic;
 String deviceConfigTopic;
 String motionStateTopic;
+String servoStateTopic;
 String powerConfigTopic;
 String powerStateTopic;
 String powerCommandTopic;
@@ -95,7 +100,7 @@ String powerTopic;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-unsigned long lastMsg = 0;
+//unsigned long lastMsg = 0;
 unsigned long lastTryConnect = 0;
 #define MSG_BUFFER_SIZE	(50)
 char msg[MSG_BUFFER_SIZE];
@@ -245,7 +250,11 @@ void setup() {
   server.on("/buttons", handle_buttons);
   server.on("/btn", HTTP_POST, handle_btn);
   //server.on("/config", HTTP_POST, handle_cfg);
-  server.on("/resetconfig", handle_cfg);
+  server.on("/config", handle_cfg);
+  server.on("/resetconfig", handle_resetcfg);
+  server.on("/hadiscoveryon", handle_publishHaDiscovery);
+  server.on("/hadiscoveryoff", handle_unpublishHaDiscovery);  
+  server.on("/events", handle_SSE);
   server.onNotFound(handleWebRequests);
   
   server.begin();
@@ -259,6 +268,7 @@ void setup() {
   motionUniqueId = deviceId + "_motion";  
   motionConfigTopic = "homeassistant/binary_sensor/" + deviceId + "/config";
   motionStateTopic = "stat/" + deviceId + "/motion";
+  servoStateTopic = "stat/" + deviceId + "/servo";
   powerUniqueId = deviceId + "_switch";
   deviceConfigTopic = "homeassistant/device/" + deviceId + "/config";
   powerConfigTopic = "homeassistant/switch/" + deviceId + "/config";
@@ -322,11 +332,11 @@ void PushButton() {
 
 uint8_t evaluate_btn_state(String btnState) {
   uint8_t state;
-  if ((DeloreanIsFlying) || (btnState == "on")) {
-    Serial.println("btn state: ON");
+  String lowbtnState = btnState;
+  lowbtnState.toLowerCase();
+  if (lowbtnState == "off") {
     state = HIGH;
-  } else if (btnState == "off") {
-    Serial.println("btn state: OFF");
+  } else if (lowbtnState == "on") {
     state = LOW;
   } else {
     Serial.println("unknow btn state: "+btnState);
@@ -339,8 +349,13 @@ void handle_btn() {
   String btnState = server.arg("btnState");
 
   if (btnPin == "1") {
-    Serial.println("power on/off");
-    poweronoffState = evaluate_btn_state(btnState);
+    Serial.println("power on/off");    
+    if (!DeloreanIsFlying) {
+      poweronoffState = evaluate_btn_state(btnState);
+      //Serial.println("btnState: " + btnState);
+      //poweronoffState = !poweronoffState;
+      digitalWrite(poweronoff, poweronoffState);
+    }
     publishPowerState();
   } else if (btnPin == "2") {      
     timeoutTimeButton = btnState.toInt();
@@ -353,7 +368,7 @@ void handle_btn() {
   server.send(302, "text/plain", "");
 }
   
-void handle_cfg() {
+void handle_resetcfg() {
   server.sendHeader("Location", "/",true);  
   server.send(302, "text/plain", "");
   Serial.println("Reset Config");
@@ -366,26 +381,98 @@ void handle_cfg() {
   delay(5000);
 }
 
+void handle_cfg() {
+  WiFiManager wifiManager;
+  wifiManager.startWebPortal();  
+
+  server.sendHeader("Location", "/",true);  
+  server.send(302, "text/plain", "");
+  Serial.println("Start Config");  
+}
+
 void handle_NotFound() {
   server.send(404, "text/html", sendPageUnknown());
+}
+
+void handle_publishHaDiscovery() {
+  server.sendHeader("Location", "/",true);  
+  server.send(302, "text/plain", "");
+  Serial.println("Reset Config");
+
+  publishHADiscoveryConfig();        
+}
+
+void handle_unpublishHaDiscovery() {
+  server.sendHeader("Location", "/",true);  
+  server.send(302, "text/plain", "");
+  Serial.println("Reset Config");
+
+  unpublishHADiscoveryConfig();        
+}
+
+/*void handle_SSE() {
+  server.sendHeader("Content-Type", "text/event-stream");
+  server.sendHeader("Cache-Control", "no-cache");
+  server.send(202, "text/event-stream", "");
+  //while (true) {
+    server.sendContent("data: " + String(poweronoffState ? "On" : "Off") + "\n\n");
+  //  delay(1000); // Sende den Status jede Sekunde
+  //}
+}*/
+
+void handle_SSE() {
+   WiFiClient client = server.client();
+  
+  if (client) {
+    //Serial.println("new client");
+    serverSentEventHeader(client);
+    //while (client.connected()) {
+      serverSentEvent(client);
+      /*server.sendHeader("Content-Type", "text/event-stream");
+      server.sendHeader("Cache-Control", "no-cache");
+      server.sendContent("");
+      server.sendContent("data: " + String(poweronoffState ? "On" : "Off") + "\n\n");*/
+  
+      delay(16); // round about 60 messages per second
+    //}
+    
+    // give the web browser time to receive the data
+    delay(1);
+    // close the connection:
+    client.stop();
+    //Serial.println("client disconnected");
+  }
+}
+
+void serverSentEventHeader(WiFiClient client) {
+  client.println("HTTP/1.1 200 OK");
+  //client.println("Content-Type: text/event-stream;charset=UTF-8");  
+  client.println("Content-Type: text/event-stream");
+  //client.println("Access-Control-Allow-Origin: *");  // allow any connection. We don't want Arduino to host all of the website ;-)
+  client.println("Cache-Control: no-cache");  // refresh the page automatically every 5 sec
+  client.println("Connection: close");  // the connection will be closed after completion of the response
+  client.println();
+}
+
+void serverSentEvent(WiFiClient client) {
+  //client.println("Content-Type: text/event-stream;charset=UTF-8");  
+  //client.println("event: message"); // this name could be anything, really.  
+  String Output = "data: " + String(poweronoffState ? "ON" : "OFF");
+  client.println(Output);
+  client.println();
+  //Serial.println("SSE: " + Output);
 }
 
 String sendPageUnknown() {
     String ptr = "<!DOCTYPE html> <html>\n";
   
   ptr += "<head>";
-  
   ptr += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-
   ptr += "<title>Page unknown</title>\n";
-  
   ptr += "</head>\n";
-
   ptr += "<body>\n";
   ptr += "<h1>Page unknown</h1>\n";
-
   ptr += "<a href=\"/\">Return to main page</a>\n";
- 
   ptr += "</body>\n";
   ptr += "</html>\n";
   return ptr;
@@ -439,23 +526,49 @@ String build_btn_form(String btnPin, uint8_t btnState) {
   String ptr = "<form action=\"btn\" method=\"post\">\n";
   ptr += "  <input type=\"hidden\" name=\"btnPin\" value=\""+btnPin+"\">\n";
 
-  String btnStateStr;
+  String btnStateStr = String(btnState ? "on" : "off");
   
-  if (btnState)
+  /*if (btnState)
   {
     btnStateStr = "off";
   }
   else
   {
     btnStateStr = "on";
-  }
+  }*/
 
   ptr += "  <input type=\"hidden\" name=\"btnState\" value=\""+btnStateStr+"\">\n";
-  ptr += "  <input type=\"submit\" class=\"button button-"+btnStateStr+"\" value=\"";
+  ptr += "  <input type=\"submit\" id=\"powerButton\" class=\"button button-"+btnStateStr+"\" value=\"";
   btnStateStr.toUpperCase();
   ptr += btnStateStr+"\">\n";
 
   ptr += "</form>\n";
+  //ptr += "<button id=\"powerButton\">Loading...</button>";
+  //ptr += "<button id=\"powerButton\">Loading...</button>";
+  ptr += "<script type=\"text/javascript\">";
+  ptr += "  const powerButton = document.getElementById('powerButton');";
+  ptr += "  const eventSource = new EventSource('/events');";
+  //ptr += "  eventSource.onmessage = function(event) { powerButton.textContent = event.data; }";
+  //ptr += "  eventSource.onmessage = function(event) { powerButton.innerText = event.data; }";
+  //ptr += "  eventSource.onmessage = function(event) { powerButton.value = event.data; powerbutton.className = \"button button-\" + event.data.toLowerCase(); }";  
+  ptr += "  eventSource.onmessage = function(event) { ";
+  ptr += "  powerButton.value = event.data;";
+  //ptr += "  powerButton.style.color = 'white';";
+  //ptr += "  if (event.data == 'ON') { powerButton.style.color = 'white'; powerButton.style.textShadow = '0px 0px 10px white'; }";
+  //ptr += "  else { powerButton.style.color = 'black'; powerButton.style.textShadow = ''; }";
+  ptr += "  if (event.data == 'ON') { powerButton.style.color = 'white'; powerButton.className = \"button button-on\"; }";
+  ptr += "  else { powerButton.style.color = 'black'; powerButton.className = \"button button-off\"; }";
+
+  //ptr += "  eventSource.onmessage = function(event) { powerButton.value = event.data; powerbutton.classList.add(\"button button-\" + event.data.toLowerCase()); }";  
+  //ptr += "  eventSource.onmessage = function(event) { window.location.reload() }";
+  /*ptr += "  var powerButton = document.getElementById(\"powerButton\");";
+  ptr += "  var source = new EventSource('/events');";
+  ptr += "  source.addEventListener(\"message\", function(e) {";
+  //ptr += "      powerButton.innerHTML = e.data + '<br>';";
+  ptr += "      confirm(\"Event\")";
+  ptr += "      powerButton.innerText = e.data;";*/
+  ptr += "  }";
+  ptr += "</script>";
   return ptr;
 }
 
@@ -471,11 +584,13 @@ String build_push_btn_form(String btnStr, String functionStr, int btnDelay) {
 
 String build_cfg_btn_form(String btnStr, String functionStr) {
   String ptr = "<div class=\"button button-reset\">Reset Config</div>";
-  ptr += "<script>\n";
+  //ptr += "<script>\n";
+  ptr += "<script type=\"text/javascript\">\n";  
   ptr += "let btnEl = document.querySelector(\"div\")\n";
   ptr += "btnEl.addEventListener(\"click\", () => {";
   ptr += "if(confirm('After the reset, you must connect to the AP again and reconfigure everything! Do you really want to reset the entire configuration?'))";
-  ptr += "window.location.href=\"/resetconfig\";})\n";
+  ptr += "window.location.href=\"/resetconfig\";})\n";  
+  //ptr += "window.location.href=\"/resetconfig\";})\n";  
   ptr += "</script>\n";
 
   return ptr;
@@ -489,22 +604,20 @@ String sendHTMLHead() {
   ptr += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
 
   ptr += "<title>Flying Delorean Did3D</title>\n";
-
-  //ptr += "<link rel=\"icon\" type=\"image/x-icon\" href=\"data:image/png;base64,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\" />";
   
   ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
   ptr += "body{margin-top: 25px; background-color: black;} h1 {color: #444444;margin: 50px auto 30px;} h3 {color: #444444;margin-bottom: 50px;} form {margin-bottom: 30px;} img{max-width:300px;}\n";  
   ptr += ".button {display: block;width: 80px;background-color: #deea26;border: none;text-decoration: none;font-size: 25px;margin: auto;cursor: pointer;border-radius: 4px;}\n";
-  ptr += ".button-on {background-color: #cb2129;color: black;}\n";
-  ptr += ".button-on:active {background-color: #cb2129;color: black;}\n";
-  ptr += ".button-off {background-color: #cb2129;color: white;}\n";
-  ptr += ".button-off:active {background-color: #A01B21;color: white;}\n";
+  ptr += ".button-off {background-color: #7F151A;color: black;}\n";
+  ptr += ".button-off:active {background-color: #7F151A;color: black;}\n";
+  ptr += ".button-on {background-color: #cb2129;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
+  ptr += ".button-on:active {background-color: #A01B21;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
   ptr += ".button-short {background-color: #70f74f;color: black;}\n";
   ptr += ".button-short:active {background-color: #56bc3c;color: black;}\n";
   ptr += ".button-long {background-color: #dfc048;color: black;}\n";
   ptr += ".button-long:active {background-color: #b59a3b;color: black;}\n";
-  ptr += ".button-reset {background-color: black;color: #7f94a1;position: absolute;bottom: 115px;left: 25px;font-size: 12px}\n";
-  ptr += ".button-reset:active {background-color: #black;color: blue;position: absolute;bottom: 115px;left: 25px;font-size: 12px}\n";
+  ptr += ".button-reset {background-color: black;color: #7f94a1;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
+  ptr += ".button-reset:active {background-color: #black;color: blue;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
   ptr += ".did3d {background-color: #black; position: absolute;bottom: 100px;right: 25px;}\n";
   ptr += "p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
   ptr += "</style>\n";
@@ -644,9 +757,10 @@ void reconnect() {
       String clientId = deviceId;
       if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {      
         Serial.println("\033[1;32mconnected\033[0m");        
-        publishDiscoveryConfig();
+//        publishDiscoveryConfig();
         // Hier ggf. Command Topics abonnieren
         // client.subscribe("mein_esp8266/switch/relay/command");
+        client.subscribe(powerCommandTopic.c_str());
       } else {
         Serial.print("\033[1;31mfailed, rc=");
         Serial.print(client.state());
@@ -663,25 +777,25 @@ void mqttloop()
   }
   client.loop();
 
-  unsigned long now = millis();
+  /*unsigned long now = millis();
   if (now - lastMsg > 1000) {
     lastMsg = now;
     ++value;
     snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
-    //Serial.print("Publish message: ");
-    //Serial.println(String(DeloreanIsFlying_topic) + " " + String(DeloreanIsFlying).c_str());
-    //client.publish("outTopic", msg);
-    //client.publish(DeloreanIsFlying_topic, String(DeloreanIsFlying).c_str(), true);    
-    //publishMotionState();
-    //publishPowerState();  
-  }
+    publishMotionState();
+    publishPowerState();  
+  }*/
 }
 
 void CheckDeloreanIsFlying() {
   LastDeloreanIsFlying = DeloreanIsFlying;
   ServoValue = pulseIn(PulseInPin, HIGH, 100000);
+  if (LastServoValue != ServoValue) {
+    publishServoState();
+    LastServoValue = ServoValue;
+  }
+  
   DeloreanIsFlying = ServoValue > 0;
-
   if (LastDeloreanIsFlying != DeloreanIsFlying) {
     Serial.println("DeloreanIsFlying = " + String(DeloreanIsFlying));
     publishMotionState();
@@ -732,7 +846,7 @@ void publishMotionConfig() {
 void publishPowerConfig() {
   // Verwende ArduinoJson für einfacheres Erstellen
   StaticJsonDocument<180> doc; // Größe anpassen nach Bedarf
-  String docName = deviceName + " switch";
+  String docName = deviceName + " Power";
   /*doc["name"] = docName; // z.B. "Mein ESP8266 Projekt Temperatur"
   doc["device_class"] = "switch"; // z.B. "Mein ESP8266 Projekt Temperatur"
   doc["command_topic"] = powerCommandTopic;  
@@ -766,8 +880,8 @@ void publishPowerConfig() {
   serializeJson(doc, output);
 
   Serial.print("Publishing config to: ");
-  Serial.println(powerConfigTopic);
-  Serial.println(output); 
+  Serial.print(powerConfigTopic);
+  Serial.println(" " + output); 
 
   // Konfiguration mit Retain-Flag senden
   if (!client.publish(powerConfigTopic.c_str(), output.c_str(), false)) { // true für retain
@@ -780,11 +894,14 @@ void publishPowerConfig() {
   // "component", "name", "unique_id", "command_topic" etc.
 }
 
-void publishDiscoveryConfig() {
-  client.publish(motionConfigTopic.c_str(), ""); // Delete old config
-  client.publish(powerConfigTopic.c_str(), ""); // Delete old config  
+void publishHADiscoveryConfig() {
   publishMotionConfig();
   publishPowerConfig();
+}
+
+void unpublishHADiscoveryConfig() {
+  client.publish(motionConfigTopic.c_str(), ""); // Delete old config
+  client.publish(powerConfigTopic.c_str(), ""); // Delete old config    
 }
 
 void publishMotionState() {
@@ -796,13 +913,32 @@ void publishMotionState() {
   String output;
   serializeJson(doc, output);
 
-  Serial.print("\033[1;32mPublishing State to: \033[0m");
-  Serial.println(motionStateTopic);
-  Serial.println(output);
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(motionStateTopic);
+  Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
 
   // Konfiguration mit Retain-Flag senden
   if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { // true für retain
-     Serial.println("\033[1;31mFailed to publish states!\033[0m");
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishServoState() {
+  if(!client.connected()) return;
+
+  StaticJsonDocument<30> doc;
+  doc["servo"] = ServoValue;
+
+  String output;
+  serializeJson(doc, output);
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(servoStateTopic);
+  Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
+
+  // Konfiguration mit Retain-Flag senden
+  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { // true für retain
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
 
@@ -810,46 +946,54 @@ void publishPowerState() {
   if(!client.connected()) return;
 
   StaticJsonDocument<30> doc; 
-  String output;
+  String output = String(poweronoffState ? "ON" : "OFF");
 
   //doc["state"] = poweronoffState; 
   //doc["switch"] = poweronoffState; 
 
-  if (poweronoffState) {
+  /*if (poweronoffState) {
     output = "ON"; 
   } else {
     output = "OFF";
-  }
+  }*/
   
   //output = String(poweronoffState);
   //output = "{\"" + String(poweronoffState) + "\"}";
   //serializeJson(doc, output);
-
-  Serial.print("\033[1;32mPublishing State to: \033[0m");
-  Serial.println(powerStateTopic);
-  Serial.println(output);
+  
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(powerStateTopic);
+  Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
 
   // Konfiguration mit Retain-Flag senden  
-  if (!client.publish(powerCommandTopic.c_str(), output.c_str(), true)) { // true für retain
+  //if (!client.publish(powerCommandTopic.c_str(), output.c_str(), true)) { // true für retain
   //client.publish(powerCommandTopic.c_str(), output.c_str(), true);
-  //if (!client.publish(powerStateTopic.c_str(), output.c_str(), true)) { // true für retain
-     Serial.println("\033[1;31mFailed to publish power state!\033[0m");
+  if (!client.publish(powerStateTopic.c_str(), output.c_str(), true)) { // true für retain
+     Serial.println("\033[1;31mMQTT Failed to publish power state!\033[0m");
   }
 }
 
 // Dummy-Funktion für eingehende Nachrichten (Befehle)
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
+  Serial.print("\033[1;36mMQTT Message arrived\033[0m [");
   Serial.print(topic);
   Serial.print("] ");
   String message;
   for (int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
-  Serial.println("\033[47m" + message + "\033[0m");
+  Serial.println("\033[0;30m]\033[46m " + message + " \033[0m");
 
   // Hier Logik zur Befehlsverarbeitung einfügen
   // z.B. if (String(topic) == "mein_esp8266/switch/relay/command") { ... }
+  if (String(topic) = powerCommandTopic) {  
+    if (!DeloreanIsFlying) {
+      poweronoffState = message == "ON";
+      digitalWrite(poweronoff, poweronoffState);
+    }
+    publishPowerState();
+    server.sendHeader("Location", "/",true);  
+  }
 }
 
 void loop() {  
@@ -859,3 +1003,4 @@ void loop() {
   PushButton();
   mqttloop();
 }
+
