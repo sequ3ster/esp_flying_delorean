@@ -8,7 +8,7 @@ But there is a solution: a second microcontroller.
 For Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented by [Craig Hancock](https://www.facebook.com/share/p/18tshCDeAy/), with a second Arduino Nano. I also wanted to implement this mod for the Flying Delorean. And I had the idea of using an ESP8266 with Wifi, to control the Arduino. So the idea for this project “ESP Flying Deloren” was born.
 
 **Functions**
-- Wifi connection with website for control 
+- Wifi connection with [website](/images/Screenshot_20250405_155759_Chrome.jpg) for control 
 - Switching the Delorean on/off
 - Changing the scenes
 - Changing the mode
