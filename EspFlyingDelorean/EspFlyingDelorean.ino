@@ -47,7 +47,6 @@ char mqtt_server[40];
 char mqtt_port[6];
 char mqtt_user[40];
 char mqtt_password[40];
-//#define BROKER_ADDR IPAddress(192,168,1,11)
 
 // --------------------------------------------------------------
 // Please do not change anything from here on
@@ -86,17 +85,25 @@ int LastServoValue = 0;
 // --- MQTT Device ---
 String mac = WiFi.macAddress(); // Eindeutige Basis für IDs
 String deviceId;
+String ipUniqueId;
 String motionUniqueId;
 String powerUniqueId;
+String shortUniqueId;
+String shortcmndTopic;
+String longUniqueId;
+String longcmndTopic;
 String deviceName = "Flying Delorean";
+String mqttDeviceConfigTopic;
 String motionConfigTopic;
 String deviceConfigTopic;
+String ipStateTopic;
 String motionStateTopic;
 String servoStateTopic;
 String powerConfigTopic;
 String powerStateTopic;
 String powerCommandTopic;
 String powerTopic;
+IPAddress ipAddress;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -265,12 +272,18 @@ void setup() {
   mac.replace(":", "");
   deviceId = "delorean_" + mac.substring(mac.length() - 4);
   //deviceId.replace(":", "");
+  ipUniqueId = deviceId + "_ip";
   motionUniqueId = deviceId + "_motion";  
+  mqttDeviceConfigTopic = "homeassistant/device/" + deviceId + "/config";
   motionConfigTopic = "homeassistant/binary_sensor/" + deviceId + "/config";
+  ipStateTopic = "state/" + deviceId + "/ip";
   motionStateTopic = "stat/" + deviceId + "/motion";
   servoStateTopic = "stat/" + deviceId + "/servo";
+  shortUniqueId = deviceId + "_short";
+  shortcmndTopic = "cmnd/" + deviceId + "/short";
+  longUniqueId = deviceId + "_long";
+  longcmndTopic = "cmnd/" + deviceId + "/long";
   powerUniqueId = deviceId + "_switch";
-  deviceConfigTopic = "homeassistant/device/" + deviceId + "/config";
   powerConfigTopic = "homeassistant/switch/" + deviceId + "/config";
   powerStateTopic = "stat/" + deviceId + "/switch";
   powerCommandTopic = "cmnd/" + deviceId + "/switch";
@@ -278,7 +291,7 @@ void setup() {
   
   client.setServer(mqtt_server, String(mqtt_port).toInt());
   client.setCallback(callback);  
-  client.setBufferSize(512);
+  client.setBufferSize(900);
 
   // Check if is something connected to SDA (D4)
   pinMode(D4, OUTPUT);
@@ -397,7 +410,7 @@ void handle_NotFound() {
 void handle_publishHaDiscovery() {
   server.sendHeader("Location", "/",true);  
   server.send(302, "text/plain", "");
-  Serial.println("Reset Config");
+  Serial.println("MQTT Home Assistant Discovery Config");
 
   publishHADiscoveryConfig();        
 }
@@ -405,7 +418,7 @@ void handle_publishHaDiscovery() {
 void handle_unpublishHaDiscovery() {
   server.sendHeader("Location", "/",true);  
   server.send(302, "text/plain", "");
-  Serial.println("Reset Config");
+  Serial.println("MQTT Home Assistatnt Reset Discovery Config");
 
   unpublishHADiscoveryConfig();        
 }
@@ -774,9 +787,13 @@ void mqttloop()
 {
   if (!client.connected()) {
     reconnect();
+  } else {
+    if (ipAddress != WiFi.localIP()) { 
+      ipAddress = WiFi.localIP();
+      publishIpState();
+    }
   }
-  client.loop();
-
+  client.loop();  
   /*unsigned long now = millis();
   if (now - lastMsg > 1000) {
     lastMsg = now;
@@ -894,14 +911,127 @@ void publishPowerConfig() {
   // "component", "name", "unique_id", "command_topic" etc.
 }
 
+void mqttHaDiscoveryConfig() {
+  // Verwende ArduinoJson für einfacheres Erstellen
+  StaticJsonDocument<900> doc; // Größe anpassen nach Bedarf
+  //String docName = deviceName + " Power";
+  /*doc["name"] = docName; // z.B. "Mein ESP8266 Projekt Temperatur"
+  doc["device_class"] = "switch"; // z.B. "Mein ESP8266 Projekt Temperatur"
+  doc["command_topic"] = powerCommandTopic;  
+  doc["state_topic"] = powerStateTopic;  
+  //doc["unit_of_measurement"] = "";
+  //doc["value_template"] = "{{ value_json.motion|default(false) }}"; // Falls JSON gesendet wird
+  //doc["value_template"] = "{{ value }}"; // Wenn nur der Wert gesendet wird
+  doc["unique_id"] = powerUniqueId; // "esp8266_AABBCCDDEEFF_temp"
+  doc["force_update"] = true;*/
+  
+  /*doc["name"] = docName; 
+  doc["cmd_t"] = powerCommandTopic;  
+  doc["stat_t"] = powerStateTopic;
+  doc["uniq_id"] = powerUniqueId;*/
+
+  // --- Geräteinformationen ---
+  /*JsonObject device = doc.createNestedObject("dev");
+  JsonArray identifiers = device.createNestedArray("ids");
+  identifiers.add(deviceId); */  
+  
+  JsonObject device = doc.createNestedObject("dev"); // Device
+  JsonArray identifiers = device.createNestedArray("ids");
+  identifiers.add(deviceId); 
+  //device["ids"] = deviceId;
+  device["name"] = deviceName;  
+  device["mf"] = "did3d.fr";  
+  device["sn"] = ESP.getChipId();
+  device["hw"] = ESP.getFlashChipId();
+  //device["sw"] = ESP.getFullVersion();
+
+  JsonObject origin = doc.createNestedObject("o"); // Origin
+  origin["name"] = "delorean2mqtt";
+  origin["sw"] = "0.3";
+  //origin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
+  
+  JsonObject components = doc.createNestedObject("cmps"); // Components
+  JsonObject power = components.createNestedObject(powerUniqueId);
+  power["p"] = "switch"; // Platform  
+  power["name"] = "Power";
+  power["cmd_t"] = powerCommandTopic;  
+  power["stat_t"] = powerStateTopic;
+  power["uniq_id"] = powerUniqueId;
+
+  JsonObject shortbtn = components.createNestedObject(shortUniqueId);
+  shortbtn["p"] = "button"; // Platform  
+  shortbtn["name"] = "Scene";
+  shortbtn["cmd_t"] = shortcmndTopic;  
+  shortbtn["uniq_id"] = shortUniqueId;
+
+  JsonObject longbtn = components.createNestedObject(longUniqueId);
+  longbtn["p"] = "button"; // Platform  
+  longbtn["name"] = "Mode";
+  longbtn["cmd_t"] = longcmndTopic;
+  longbtn["uniq_id"] = longUniqueId;
+  
+  JsonObject motion = components.createNestedObject(motionUniqueId);
+  motion["p"] = "binary_sensor"; //Platform
+  motion["name"] = "Motion";  
+  motion["stat_t"] = motionStateTopic;
+  motion["uniq_id"] = motionUniqueId;
+  
+  JsonObject ipadd = components.createNestedObject(ipUniqueId);
+  ipadd["p"] = "sensor"; //Platform
+  ipadd["name"] = "IP";  
+  ipadd["stat_t"] = ipStateTopic;
+  ipadd["uniq_id"] = ipUniqueId;
+
+  String output;
+  serializeJson(doc, output);
+
+  Serial.print("Publishing config to: ");
+  Serial.print(mqttDeviceConfigTopic);
+  Serial.println(" " + output); 
+
+  // Konfiguration mit Retain-Flag senden
+  if (!client.publish(mqttDeviceConfigTopic.c_str(), output.c_str(), false)) { // true für retain
+     Serial.println("\033[1;31mFailed to publish power config!\033[0m");
+  } 
+  publishPowerState();
+
+  // *** Hier würden weitere Konfigurationen für andere Entitäten folgen ***
+  // z.B. für einen Schalter, mit dem gleichen "device"-Block, aber anderem
+  // "component", "name", "unique_id", "command_topic" etc.
+}
+
 void publishHADiscoveryConfig() {
-  publishMotionConfig();
-  publishPowerConfig();
+  mqttHaDiscoveryConfig();
+  //publishMotionConfig();
+  //publishPowerConfig();
 }
 
 void unpublishHADiscoveryConfig() {
-  client.publish(motionConfigTopic.c_str(), ""); // Delete old config
-  client.publish(powerConfigTopic.c_str(), ""); // Delete old config    
+  client.publish(mqttDeviceConfigTopic.c_str(), "");
+  /*client.publish(motionConfigTopic.c_str(), "");
+  client.publish(motionStateTopic.c_str(), "");
+  client.publish(powerConfigTopic.c_str(), "");
+  client.publish(powerStateTopic.c_str(), "");
+  client.publish(powerCommandTopic.c_str(), "");    */
+}
+
+void publishIpState() {
+  if(!client.connected()) return;
+
+  //StaticJsonDocument<30> doc;
+  //doc["motion"] = DeloreanIsFlying;
+
+  //String output;
+  //serializeJson(doc, output);
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(ipStateTopic);
+  Serial.println("\033[1;37m \033[44m " + ipAddress.toString() + " \033[0m");
+
+  // Konfiguration mit Retain-Flag senden
+  if (!client.publish(ipStateTopic.c_str(), ipAddress.toString().c_str(), true)) { // true für retain
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
 }
 
 void publishMotionState() {
@@ -996,8 +1126,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-void loop() {  
-  CheckDeloreanIsFlying();
+void loop() {    
+  CheckDeloreanIsFlying();  
   server.handleClient();    
   matrixloop();  
   PushButton();
