@@ -10,9 +10,9 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 **Functions**
 - Wifi connection with website for control 
 - Switching the Delorean on/off
-- EQ LED mod for the status indicator
 - Changing the scenes
 - Changing the mode
+- EQ LED mod for the status indicator
 - Communication via MQTT (with Home Assistant Discovery Support)
 
 **Circut**
