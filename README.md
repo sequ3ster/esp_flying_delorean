@@ -34,10 +34,6 @@ Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for
 <img src="/images/esptool_littlefs.png" width="300">
 <br><br>
 
-**Circut**
-<br><img src="/images/circuit_diagram.png" width="600">
-<br><br>
-
 **Access Point Mode**
 <br><img src="/images/Screenshot_20250416_210753_Chrome.jpg" width="300">
 <img src="/images/Screenshot_20250416_210802_Chrome.jpg" width="300">
@@ -58,8 +54,16 @@ Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for
 <br><br>
 
 **Hardware**
-- <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
-- <img src="/images/AdafruitCharliePlex.jpg" width="300"><br>[Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White](https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss)
+- <img src="/images/D1MiniNodeMCU.png" width="150"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
 - 1x 1k ohm 1/4 watt Resistor
 - 2x 180K ohm 1/4 watt Resistor
 - 1x IRL510 Mosfet
+<br><br>
+
+**EQ LED Mod Circut**
+<br><img src="/images/circuit_diagram.png" width="600">
+<br><br>
+
+**Additional Hardware for EQ LED Mod**
+<br><img src="/images/AdafruitCharliePlex.jpg" width="300"><br>[Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White](https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss)
+  
