@@ -20,7 +20,7 @@ otherwise there is a risk of breaking the gears.
 This is why the on/off button and the mqtt power switch do not work when the Delorean is flying.
 <br><br>
 
-[3D Printi STL](/stl)
+[3D Printing STL](/stl)
 
 [Circuit](/circuit)
 
