@@ -1,9 +1,18 @@
-**3D Printing**
+## 3D Printing
 
-You need to print the "Wall rear", "EQ Front" and one of the EQ defuser. "EQ-defuser-ams.stl" or 7x "EQ-defuser.stl".
+You need to print the "Wall rear", "EQ Front" and one of the EQ defuser.  
+
+
+**EQ-defuser.stl**<br>
+You need to print 7 times this EQ-defuser.
+<img src="/images/130866345_169139874901881_3587356566955457741_n.jpg" width="300">
+
+
+**EQ-defuser-ams.stl**<br>
+Or you print this EQ-defuser with a Multicolor FDM Printer like Bambu Lab.
 In the AMS version, each LED has its own defuser. These are then separated by a different Filament Color.<br>
 <img src="/images/EQ-defuser-ams.jpg" width="300">
 
-
+**Bambu Studio**<br>
 You will also find a Bambu Studio file “EQ-Mod.3mf” with 4 printing plates.
 <br><img src="/images/bambustudio.png" width="600">
