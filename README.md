@@ -40,7 +40,7 @@ This is why the on/off button and the mqtt power switch do not work when the Del
 Every time the Deloren is Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
 you need another Wall-Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
 All STL Files you will get from Google Drive. Search in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
-<br><img src="/images/Animation.gif">
+<br><img src="/images/Animation.gif" width="180">
 <br><img src="/images/circuit_diagram_eq.png" width="600">
 <br><br>
 
