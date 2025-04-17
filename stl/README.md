@@ -1,5 +1,5 @@
 **3D Printing**
-You can print this files in Resin or FDM.
+<br>You can print this files in Resin or FDM.
 
 You need to print the "Wall rear", "EQ Front" and one of the EQ defuser. "EQ-defuser-ams.stl" or 7x "EQ-defuser.stl".
 
