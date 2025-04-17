@@ -6,6 +6,7 @@ This model is animatronic and can be controlled via a button on the bottom. The 
 
 But there is a solution: a second microcontroller.
 In Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented with a second Arduino Nano. I also wanted to implement this mod for the Flying Delorean. I also had the idea of using an ESP8266 to control the Arduino. So the idea for this project “ESP Flying Deloren” was born.
+<br><br>
 
 **Functions**
 - Wifi connection with website for control 
@@ -15,27 +16,46 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 - EQ LED mod for the status indicator
 - Communication via MQTT (with Home Assistant Discovery Support)
 
+$${\color{red}WARNING!}$$: The car must never be switched on unless it is resting on its wheels in road mode,
+otherwise there is a risk of breaking the gears.
+The On/Off Button and also the mqtt power switch don't work when the Delorean is flying.
+<br><br>
+
 **Firmware**
 <br>The released firmware is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Board.
 Feel free to build your own version with the Arduino IDE. Then you need also to upload the Data folter to LittleFS.
+<br><br>
 
 **Installation**
-<br>
+<br>For the firmware installation I can recommend the online tool from Espressif. [https://espressif.github.io/esptool-js/](https://espressif.github.io/esptool-js/)
+<br><img src="/images/esptool.png" width="300"><br>
+Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for the littleFS Image. The littleFS Image contains pictures for the Web Frontend.
+<br><img src="/images/esptool_latest.png" width="300">
+<img src="/images/esptool_littlefs.png" width="300">
+<br><br>
 
 **Circut**
-<br><img src="/images/circuit_diagram.png" width="300">
+<br><img src="/images/circuit_diagram.png" width="600">
+<br><br>
 
 **Access Point Mode**
 <br><img src="/images/Screenshot_20250416_210753_Chrome.jpg" width="300">
 <img src="/images/Screenshot_20250416_210802_Chrome.jpg" width="300">
+<br><br>
 
 **Frontend**
 <br><img src="/images/Screenshot_20250416_210002_Chrome.jpg" width="300">
 <img src="/images/Screenshot_20250416_210016_Chrome.jpg" width="300">
 <img src="/images/Screenshot_20250416_210028_Chrome.jpg" width="300">
+<br><br>
 
 **Home Assistant**
 <br><img src="/images/Screenshot_20250417_094744_Home Assistant.jpg" width="300">
+<br><br>
+
+**Circut**
+<br><img src="/images/circuit_diagram.png" width="600">
+<br><br>
 
 **Hardware**
 - <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
