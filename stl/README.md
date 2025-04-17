@@ -6,4 +6,4 @@ In the AMS version, each LED has its own defuser. These are then separated by a 
 
 
 You will also find a Bambu Studio file “EQ-Mod.3mf” with 4 printing plates.
-
+<br><img src="/images/bambustudio.png" width="600">
