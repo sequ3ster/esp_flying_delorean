@@ -1,9 +1,11 @@
+# Firmware Installation
+
 **Firmware**
-<br>The released firmware is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Boards.
-Feel free to build your own version with the Arduino IDE. Then you need also to upload the Data folder to LittleFS.
+<br>The [released firmware](https://github.com/sequ3ster/esp_flying_delorean/releases/latest/) is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Boards.
+When you like to use another Controller, then feel free to build your own version with the Arduino IDE. Don't forget to upload the Data folder via [Arduino IDE to LittleFS](https://forum.arduino.cc/t/littlefs-data-upload-in-arduino-2-x-x/1174393). 
 <br><br>
 
-**Installation**
+**Installation D1 Mini**
 <br>For the firmware installation I can recommend the online tool from Espressif. [https://espressif.github.io/esptool-js/](https://espressif.github.io/esptool-js/)
 <br><img src="/images/esptool.png" width="300"><br>
 Use 115200 baud, address 0x0000 for the latest firmware and address 0x200000 for the littleFS image. The littleFS image contains images for the web frontend. $${\color{red}Attention!}$$ Flashing the littleFS image deletes the MQTT configuration.
