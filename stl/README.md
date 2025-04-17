@@ -15,6 +15,6 @@ Or you print this EQ-defuser with a Multicolor FDM Printer like Bambu Lab.
 In this version, each LED has its own defuser. These are then separated by a different Filament Color.<br>
 <img src="/images/EQ-defuser-ams.jpg" width="300">
 
-**EQ-Mod.3mf Bambu Studio**<br>
+**[EQ-Mod.3mf](/stl/EQ-Mod.3mf) Bambu Studio**<br>
 You will also find a Bambu Studio file “EQ-Mod.3mf” with 4 printing plates.
 <br><img src="/images/bambustudio.png" width="600">
