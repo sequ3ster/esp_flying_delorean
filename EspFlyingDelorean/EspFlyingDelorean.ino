@@ -28,6 +28,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_IS31FL3731.h>
 #include <PubSubClient.h>
+#include <ElegantOTA.h>
 #include "animation.h" 
 
 #ifdef ESP32
@@ -44,9 +45,10 @@ bool debugMatrix = false;
 
 //define your default values here, if there are different values in config.json, they are overwritten.
 char mqtt_server[40];
-char mqtt_port[6];
+char mqtt_port[6] = "1883";
 char mqtt_user[40];
 char mqtt_password[40];
+char mqtt_ha_topic[40] = "homeassistant";
 
 // --------------------------------------------------------------
 // Please do not change anything from here on
@@ -69,10 +71,13 @@ unsigned long LastTimeFlying = 0;
 const long timeoutTime = 200;
 long timeoutTimeButton = 0;
 
-uint8_t PulseInPin = 13; // ESP8266 PulseIn = D7 --- 100k ohm
-uint8_t pushbutton = 12; //ESP8266 GPIO12 = D6 --- Diode or 470-1k ohm
-uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5
+uint8_t PulseInPin = 13; // ESP8266 PulseIn = D7 --- 180k ohm
+uint8_t pushbutton = 12; //ESP8266 GPIO12 = D6 --- 470-1k ohm
+uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
+uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
 uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
+
+String swversion = "0.4 (beta)";
 
 bool pushbuttonState = HIGH;
 bool poweronoffState = LOW;
@@ -81,6 +86,7 @@ bool DeloreanIsFlying = false;
 bool LastDeloreanIsFlying = false; 
 int ServoValue = 0; 
 int LastServoValue = 0; 
+int powerstateState = 0;
 
 // --- MQTT Device ---
 String mac = WiFi.macAddress(); // Eindeutige Basis für IDs
@@ -94,20 +100,20 @@ String longUniqueId;
 String longcmndTopic;
 String deviceName = "Flying Delorean";
 String mqttDeviceConfigTopic;
-String motionConfigTopic;
 String deviceConfigTopic;
 String ipStateTopic;
 String motionStateTopic;
 String servoStateTopic;
-String powerConfigTopic;
 String powerStateTopic;
 String powerCommandTopic;
-String powerTopic;
+int8_t rssi;
+int8_t freeRam;
 IPAddress ipAddress;
+
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-//unsigned long lastMsg = 0;
+unsigned long lastMsg = 0;
 unsigned long lastTryConnect = 0;
 #define MSG_BUFFER_SIZE	(50)
 char msg[MSG_BUFFER_SIZE];
@@ -119,21 +125,51 @@ void saveConfigCallback () {
   shouldSaveConfig = true;        
 }
 
+void SaveConfig () {
+  //save the custom parameters to FS
+    Serial.println("saving config");
+ #if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
+    DynamicJsonDocument json(1024);
+#else
+    DynamicJsonBuffer jsonBuffer;
+    JsonObject& json = jsonBuffer.createObject();
+#endif
+    json["mqtt_server"] = mqtt_server;
+    json["mqtt_port"] = mqtt_port;
+    json["mqtt_user"] = mqtt_user;
+    json["mqtt_password"] = mqtt_password;
+    json["mqtt_ha_topic"] = mqtt_ha_topic;
+    
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (!configFile) {
+      Serial.println("\033[1;31mfailed to open config file for writing\033[0m");
+    }
+
+#if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
+    serializeJson(json, Serial);
+    serializeJson(json, configFile);
+#else
+    json.printTo(Serial);
+    json.printTo(configFile);
+#endif
+    configFile.close();
+    //end save
+}
+
 void setup() {
   Serial.begin(74800);
-  // Initialize the output variables as outputs
   pinMode(pushbutton, OUTPUT);
   pinMode(poweronoff, OUTPUT);
   pinMode(StatusIndicator, OUTPUT);
   pinMode(PulseInPin, INPUT);
-  // Set outputs to LOW
+  pinMode(powerstate, INPUT);
   pushbuttonState = HIGH;
   poweronoffState = LOW;
+  powerstateState = 0;
   StatusIndicatorState = HIGH;
   digitalWrite(pushbutton, pushbuttonState);
   digitalWrite(poweronoff, poweronoffState);
   digitalWrite(StatusIndicator, StatusIndicatorState);
-  //deviceMac.replace(":", "");
 
  //read configuration from FS json
   Serial.println("mounting FS...");
@@ -166,7 +202,7 @@ void setup() {
           Serial.println("\nparsed json");
           strcpy(mqtt_server, json["mqtt_server"]);
           strcpy(mqtt_port, json["mqtt_port"]);
-          //strcpy(api_token, json["api_token"]);
+          strcpy(mqtt_ha_topic, json["mqtt_ha_topic"]);
           strcpy(mqtt_user, json["mqtt_user"]);
           strcpy(mqtt_password, json["mqtt_password"]);
           Serial.println("Password: "+String(json["password"]));
@@ -181,9 +217,6 @@ void setup() {
   }
   //end read
   
-  //Serial.println("mqtt_server1: " + String(mqtt_server) + ", mqtt_port: " + String(mqtt_port));
-  //Serial.print("mqtt_user1: " + String(mqtt_user) + ", mqtt_password: " + String(mqtt_password));  
-  
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
   // id/name placeholder/prompt default length
@@ -191,18 +224,21 @@ void setup() {
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_mqtt_user("user", "mqtt user", mqtt_user, 40);
   WiFiManagerParameter custom_mqtt_password("password", "mqtt password", mqtt_password, 40);  
+  WiFiManagerParameter custom_mqtt_ha_topic("topic", "HA Discovery topic", mqtt_ha_topic, 40);    
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.setConfigPortalTimeout(180);
+  wifiManager.setCustomHeadElement("<style>form[action='/info'],form[action='/exit']:nth-of-type(2){display:none}</style>");
   
   //add all your parameters here
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_mqtt_user);
   wifiManager.addParameter(&custom_mqtt_password);   
+  wifiManager.addParameter(&custom_mqtt_ha_topic);   
 
   //fetches ssid and pass and tries to connect
   //if it does not connect it starts an access point with the specified name
@@ -217,53 +253,32 @@ void setup() {
   }
 
   strcpy(mqtt_server, custom_mqtt_server.getValue());
-  //mqtt_port = atoi(custom_mqtt_port.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
   strcpy(mqtt_user, custom_mqtt_user.getValue());
   strcpy(mqtt_password, custom_mqtt_password.getValue());  
+  strcpy(mqtt_ha_topic, custom_mqtt_ha_topic.getValue());  
 
 //save the custom parameters to FS
   if (shouldSaveConfig) {
-    Serial.println("saving config");
- #if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
-    DynamicJsonDocument json(1024);
-#else
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& json = jsonBuffer.createObject();
-#endif
-    json["mqtt_server"] = mqtt_server;
-    json["mqtt_port"] = mqtt_port;
-    json["mqtt_user"] = mqtt_user;
-    json["mqtt_password"] = mqtt_password;
-
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      Serial.println("\033[1;31mfailed to open config file for writing\033[0m");
-    }
-
-#if defined(ARDUINOJSON_VERSION_MAJOR) && ARDUINOJSON_VERSION_MAJOR >= 6
-    serializeJson(json, Serial);
-    serializeJson(json, configFile);
-#else
-    json.printTo(Serial);
-    json.printTo(configFile);
-#endif
-    configFile.close();
-    //end save
+    SaveConfig();
   }
 
   // Print local IP address and start web server   
   server.on("/", handle_root);
   server.on("/buttons", handle_buttons);
   server.on("/btn", HTTP_POST, handle_btn);
-  //server.on("/config", HTTP_POST, handle_cfg);
+  server.on("/saveconfig", HTTP_POST, handle_savecfg);
+  server.on("/ota", handle_ota);
   server.on("/config", handle_cfg);
-  server.on("/resetconfig", handle_resetcfg);
+  server.on("/apmode", handle_ap);
+  server.on("/restart", handle_restart);  
   server.on("/hadiscoveryon", handle_publishHaDiscovery);
   server.on("/hadiscoveryoff", handle_unpublishHaDiscovery);  
   server.on("/events", handle_SSE);
   server.onNotFound(handleWebRequests);
   
+  ElegantOTA.begin(&server);
+
   server.begin();
   Serial.println("\033[1;32mHTTP Server started\033[0m");
 
@@ -271,27 +286,23 @@ void setup() {
   mac = WiFi.macAddress(); // MAC Adresse holen NACHDEM WLAN verbunden ist
   mac.replace(":", "");
   deviceId = "delorean_" + mac.substring(mac.length() - 4);
-  //deviceId.replace(":", "");
   ipUniqueId = deviceId + "_ip";
+
   motionUniqueId = deviceId + "_motion";  
-  mqttDeviceConfigTopic = "homeassistant/device/" + deviceId + "/config";
-  motionConfigTopic = "homeassistant/binary_sensor/" + deviceId + "/config";
-  ipStateTopic = "state/" + deviceId + "/ip";
+  mqttDeviceConfigTopic = String(mqtt_ha_topic) + "/device/" + deviceId + "/config";
+  ipStateTopic = "stat/" + deviceId + "/ip";
   motionStateTopic = "stat/" + deviceId + "/motion";
-  servoStateTopic = "stat/" + deviceId + "/servo";
   shortUniqueId = deviceId + "_short";
   shortcmndTopic = "cmnd/" + deviceId + "/short";
   longUniqueId = deviceId + "_long";
   longcmndTopic = "cmnd/" + deviceId + "/long";
   powerUniqueId = deviceId + "_switch";
-  powerConfigTopic = "homeassistant/switch/" + deviceId + "/config";
   powerStateTopic = "stat/" + deviceId + "/switch";
   powerCommandTopic = "cmnd/" + deviceId + "/switch";
-  powerTopic = "homeassistant/switch/" + deviceId;
   
   client.setServer(mqtt_server, String(mqtt_port).toInt());
   client.setCallback(callback);  
-  client.setBufferSize(900);
+  client.setBufferSize(2176);
 
   // Check if is something connected to SDA (D4)
   pinMode(D4, OUTPUT);
@@ -308,7 +319,7 @@ void setup() {
   } else {
     MatrixConnected = true;
     Serial.println("\033[1;32mIS31 Connected\033[0m");
-  }  
+  } 
 }
 
 void handle_root() {  
@@ -318,9 +329,16 @@ void handle_root() {
   server.sendContent("");
 }
 
-void handle_buttons() {
+void handle_ota() {  
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", sendHTMLHead());
+  server.sendContent(sendHTMLota());    
+  server.sendContent("");
+}
+
+void handle_buttons() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/html", sendButtonHTMLHead());
   server.sendContent(sendHTMLButtons());    
   server.sendContent(""); 
 }
@@ -364,10 +382,9 @@ void handle_btn() {
   if (btnPin == "1") {
     Serial.println("power on/off");    
     if (!DeloreanIsFlying) {
-      poweronoffState = evaluate_btn_state(btnState);
-      //Serial.println("btnState: " + btnState);
-      //poweronoffState = !poweronoffState;
-      digitalWrite(poweronoff, poweronoffState);
+      /*poweronoffState = evaluate_btn_state(btnState);
+      digitalWrite(poweronoff, poweronoffState);*/
+      digitalWrite(poweronoff, evaluate_btn_state(btnState));
     }
     publishPowerState();
   } else if (btnPin == "2") {      
@@ -380,27 +397,67 @@ void handle_btn() {
   server.sendHeader("Location", "/buttons",true);  
   server.send(302, "text/plain", "");
 }
+
+void handle_savecfg() {
+  char mqtthatopic[40];
+  strcpy(mqtthatopic, server.arg("mqtthatopic").c_str());  
+
+  if (mqtt_ha_topic != mqtthatopic) {
+    unpublishHADiscoveryConfig();
+    strcpy(mqtt_ha_topic, mqtthatopic);    
+  }
   
-void handle_resetcfg() {
+  strcpy(mqtt_server, server.arg("mqttserver").c_str());
+  strcpy(mqtt_port, server.arg("mqttport").c_str());
+  strcpy(mqtt_user, server.arg("mqttuser").c_str());
+    
+  if (server.arg("mqttpass") != "") {
+    strcpy(mqtt_password, server.arg("mqttpass").c_str());
+  }
+
+  if (server.arg("mqtthatopic") != "") mqttHaDiscoveryConfig();
+
+  SaveConfig();
+
   server.sendHeader("Location", "/",true);  
+  server.send(302, "text/plain", "");  
+}
+
+void handle_ap() {
+  server.sendHeader("Location", "http://192.168.4.1/",true);  
   server.send(302, "text/plain", "");
-  Serial.println("Reset Config");
+  Serial.println("Start AP Mode");  
 
   WiFiManager wifiManager;
-  
   wifiManager.resetSettings();  
-  delay(3000);
+  delay(200);
   ESP.restart();
   delay(5000);
 }
 
-void handle_cfg() {
+void handle_upd() {
   WiFiManager wifiManager;
   wifiManager.startWebPortal();  
 
   server.sendHeader("Location", "/",true);  
   server.send(302, "text/plain", "");
   Serial.println("Start Config");  
+}
+
+void handle_restart() {
+  server.sendHeader("Location", "/",true);  
+  server.send(302, "text/plain", "");
+  Serial.println("Restart");    
+  delay(100);
+  ESP.restart();
+  delay(5000);
+}
+
+void handle_cfg() {
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/html", sendHTMLHead());
+  server.sendContent(sendConfigHTMLBody());    
+  server.sendContent("");  
 }
 
 void handle_NotFound() {
@@ -412,7 +469,7 @@ void handle_publishHaDiscovery() {
   server.send(302, "text/plain", "");
   Serial.println("MQTT Home Assistant Discovery Config");
 
-  publishHADiscoveryConfig();        
+  mqttHaDiscoveryConfig();        
 }
 
 void handle_unpublishHaDiscovery() {
@@ -423,37 +480,18 @@ void handle_unpublishHaDiscovery() {
   unpublishHADiscoveryConfig();        
 }
 
-/*void handle_SSE() {
-  server.sendHeader("Content-Type", "text/event-stream");
-  server.sendHeader("Cache-Control", "no-cache");
-  server.send(202, "text/event-stream", "");
-  //while (true) {
-    server.sendContent("data: " + String(poweronoffState ? "On" : "Off") + "\n\n");
-  //  delay(1000); // Sende den Status jede Sekunde
-  //}
-}*/
-
 void handle_SSE() {
    WiFiClient client = server.client();
   
-  if (client) {
-    //Serial.println("new client");
-    serverSentEventHeader(client);
-    //while (client.connected()) {
-      serverSentEvent(client);
-      /*server.sendHeader("Content-Type", "text/event-stream");
-      server.sendHeader("Cache-Control", "no-cache");
-      server.sendContent("");
-      server.sendContent("data: " + String(poweronoffState ? "On" : "Off") + "\n\n");*/
-  
-      delay(16); // round about 60 messages per second
-    //}
-    
+  if (client) {    
+    serverSentEventHeader(client);    
+    serverSentEvent(client);      
+
     // give the web browser time to receive the data
-    delay(1);
+    delay(16); // round about 60 messages per second            
+    
     // close the connection:
     client.stop();
-    //Serial.println("client disconnected");
   }
 }
 
@@ -468,12 +506,9 @@ void serverSentEventHeader(WiFiClient client) {
 }
 
 void serverSentEvent(WiFiClient client) {
-  //client.println("Content-Type: text/event-stream;charset=UTF-8");  
-  //client.println("event: message"); // this name could be anything, really.  
   String Output = "data: " + String(poweronoffState ? "ON" : "OFF");
   client.println(Output);
   client.println();
-  //Serial.println("SSE: " + Output);
 }
 
 String sendPageUnknown() {
@@ -537,49 +572,22 @@ bool loadFromSpiffs(String path){
 
 String build_btn_form(String btnPin, uint8_t btnState) {
   String ptr = "<form action=\"btn\" method=\"post\">\n";
+  String btnStateStr = String(btnState ? "on" : "off");  
+
   ptr += "  <input type=\"hidden\" name=\"btnPin\" value=\""+btnPin+"\">\n";
-
-  String btnStateStr = String(btnState ? "on" : "off");
-  
-  /*if (btnState)
-  {
-    btnStateStr = "off";
-  }
-  else
-  {
-    btnStateStr = "on";
-  }*/
-
   ptr += "  <input type=\"hidden\" name=\"btnState\" value=\""+btnStateStr+"\">\n";
   ptr += "  <input type=\"submit\" id=\"powerButton\" class=\"button button-"+btnStateStr+"\" value=\"";
   btnStateStr.toUpperCase();
   ptr += btnStateStr+"\">\n";
 
   ptr += "</form>\n";
-  //ptr += "<button id=\"powerButton\">Loading...</button>";
-  //ptr += "<button id=\"powerButton\">Loading...</button>";
   ptr += "<script type=\"text/javascript\">";
   ptr += "  const powerButton = document.getElementById('powerButton');";
-  ptr += "  const eventSource = new EventSource('/events');";
-  //ptr += "  eventSource.onmessage = function(event) { powerButton.textContent = event.data; }";
-  //ptr += "  eventSource.onmessage = function(event) { powerButton.innerText = event.data; }";
-  //ptr += "  eventSource.onmessage = function(event) { powerButton.value = event.data; powerbutton.className = \"button button-\" + event.data.toLowerCase(); }";  
+  ptr += "  const eventSource = new EventSource('/events');";  
   ptr += "  eventSource.onmessage = function(event) { ";
-  ptr += "  powerButton.value = event.data;";
-  //ptr += "  powerButton.style.color = 'white';";
-  //ptr += "  if (event.data == 'ON') { powerButton.style.color = 'white'; powerButton.style.textShadow = '0px 0px 10px white'; }";
-  //ptr += "  else { powerButton.style.color = 'black'; powerButton.style.textShadow = ''; }";
+  ptr += "  powerButton.value = event.data;";  
   ptr += "  if (event.data == 'ON') { powerButton.style.color = 'white'; powerButton.className = \"button button-on\"; }";
   ptr += "  else { powerButton.style.color = 'black'; powerButton.className = \"button button-off\"; }";
-
-  //ptr += "  eventSource.onmessage = function(event) { powerButton.value = event.data; powerbutton.classList.add(\"button button-\" + event.data.toLowerCase()); }";  
-  //ptr += "  eventSource.onmessage = function(event) { window.location.reload() }";
-  /*ptr += "  var powerButton = document.getElementById(\"powerButton\");";
-  ptr += "  var source = new EventSource('/events');";
-  ptr += "  source.addEventListener(\"message\", function(e) {";
-  //ptr += "      powerButton.innerHTML = e.data + '<br>';";
-  ptr += "      confirm(\"Event\")";
-  ptr += "      powerButton.innerText = e.data;";*/
   ptr += "  }";
   ptr += "</script>";
   return ptr;
@@ -595,21 +603,53 @@ String build_push_btn_form(String btnStr, String functionStr, int btnDelay) {
   return ptr;
 }
 
-String build_cfg_btn_form(String btnStr, String functionStr) {
-  String ptr = "<div class=\"button button-reset\">Reset Config</div>";
-  //ptr += "<script>\n";
-  ptr += "<script type=\"text/javascript\">\n";  
-  ptr += "let btnEl = document.querySelector(\"div\")\n";
-  ptr += "btnEl.addEventListener(\"click\", () => {";
-  ptr += "if(confirm('After the reset, you must connect to the AP again and reconfigure everything! Do you really want to reset the entire configuration?'))";
-  ptr += "window.location.href=\"/resetconfig\";})\n";  
-  //ptr += "window.location.href=\"/resetconfig\";})\n";  
-  ptr += "</script>\n";
+String sendHTMLHead() {
+  String ptr = "<!DOCTYPE html> <html>\n";
+  ptr += "<head>";
+  ptr += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  ptr += "<title>Flying Delorean Did3D</title>\n";  
+  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
+  ptr += "body{margin-top: 25px; background-color: black; background-image: url('/BTTF2.webp'); background-repeat: no-repeat; background-position: center 50px;} h1 {color: #444444;margin: 50px auto 30px;} h3 {color: #444444;margin-bottom: 50px;} form {margin-bottom: 30px;} img{max-width:300px;}\n";  
+  ptr += ".button {display: block;width: 150px;background-color: #deea26;border: none;text-decoration: none;font-size: 25px;margin: auto;cursor: pointer;border-radius: 4px;}\n";  
+  ptr += ".did3d {background-color: #black; position: fixed;bottom: 15px;right: 15px;}\n";  
+  ptr += ".swversion {background-color: #black; position: fixed;bottom: 10px;left: 10px; color: gray;}\n";  
+  ptr += ".config {background-color: #black; color: lightgray;}\n";  
+  ptr += ".configtable {margin-left: auto;margin-right: auto; text-align: left;}";
+  ptr += ".readonly {background-color: gray; color: lightgray;}";
 
+  /* off-screen-menu */
+  ptr += ".off-screen-menu {background-color: #696969; opacity: 0.85; height: 420px; width: 210px;position: fixed;top: 20px;right: -450px;display: flex;flex-direction: column;align-items: center;justify-content: center;text-align: center;font-size: 1.5rem;transition: .3s ease;}\n";
+  ptr += ".off-screen-menu.active {right: 0;}\n";
+
+  /* nav */
+  ptr += "nav {padding: 1rem;display: flex;background-color: transparent;}\n";
+
+  /* ham menu */
+  ptr += ".ham-menu {height: 40px;width: 40px;margin-left: auto;position: relative;}\n";
+  ptr += ".ham-menu span {height: 5px;width: 100%;background-color: #696969;border-radius: 25px;position: absolute;left: 50%;top: 50%;transform: translate(-50%, -50%);transition: .3s ease;}\n";
+  ptr += ".ham-menu span:nth-child(1) {top: 25%;}\n";
+  ptr += ".ham-menu span:nth-child(3) {top: 75%;}\n";
+  ptr += ".ham-menu.active span {background-color: white;}\n";
+  ptr += ".ham-menu.active span:nth-child(1) {top: 50%;transform: translate(-50%, -50%) rotate(45deg);}\n";
+  ptr += ".ham-menu.active span:nth-child(2) {opacity: 0;}\n";
+  ptr += ".ham-menu.active span:nth-child(3) {top: 50%;transform: translate(-50%, -50%) rotate(-45deg);}\n";
+
+  /* button menu*/
+  ptr += ".button-menu {background-color: #606060;color: white; text-align: left;}\n";
+  ptr += ".button-menu:active {background-color: #565656;color: white; text-align: left;}\n";
+  ptr += ".button-config {background-color: #606060;color: white;}\n";
+  ptr += ".button-config:active {background-color: #565656;color: white;}\n";
+  ptr += ".button-ap {background-color: #606060;color: white;}\n";
+  ptr += ".button-ap:active {background-color: #565656;color: white;}\n";
+
+
+  ptr += "p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
+  ptr += "</style>\n";
+  ptr += "</head>\n";
   return ptr;
 }
 
-String sendHTMLHead() {
+String sendButtonHTMLHead() {
   String ptr = "<!DOCTYPE html> <html>\n";
   
   ptr += "<head>";
@@ -631,21 +671,137 @@ String sendHTMLHead() {
   ptr += ".button-long:active {background-color: #b59a3b;color: black;}\n";
   ptr += ".button-reset {background-color: black;color: #7f94a1;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
   ptr += ".button-reset:active {background-color: #black;color: blue;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
-  ptr += ".did3d {background-color: #black; position: absolute;bottom: 100px;right: 25px;}\n";
   ptr += "p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
   ptr += "</style>\n";
   ptr += "</head>\n";
   return ptr;
 }
 
+String sendConfigHTMLBody() {
+  String ptr = "<body>\n";    
+  ptr += sendHTMLMenu();   
+  ptr += sendHTMLFooter();
+  ptr += "<p><br><br><br><br><br><br></p>\n";  
+  ptr += "<form action=\"saveconfig\" method=\"post\" class=\"config\">\n";
+  ptr += "  <table class=\"configtable\"><tr>";
+  ptr += "  <td><label for=\"wifissid\">Wifi SSID</label></td><td><input id=\"wifissid\" class=\"readonly\" value=\"" + String(WiFi.SSID()) + "\" readonly></td>\n";     
+  ptr += "  </tr><tr>";    
+  ptr += "  <td></td><td><br></td>"; 
+  ptr += "  </tr><tr>";  
+  ptr += "  <td></td><td><input type=\"button\" class=\"button button-ap\" value=\"AP mode\" id=\"startApMode\"></td>\n";  
+  ptr += "  </tr><tr>";  
+  ptr += "  <td></td><td><br></td>";  
+  ptr += "  </tr><tr>";  
+  ptr += "  <td style=\"color: white;\"><b>MQTT-Brocker</b></td><td></td>";  
+  ptr += "  </tr><tr>";  
+  ptr += "  <td><label for=\"mqttdevice\">Device</label></td><td><input id=\"mqttdevice\" class=\"readonly\" value=\"" + deviceId + "\" readonly></td>\n";  
+  ptr += "  </tr><tr>";
+  ptr += "  <td><label for=\"mqttconnected\">Connected</label></td><td><input id=\"mqttconnected\" class=\"readonly\" value=\"" + String(client.connected() ? "true" : "false") + "\" readonly></td>\n";  
+  ptr += "  </tr><tr>";
+  ptr += "  <td><label for=\"mqttserver\">Server</label></td><td><input name=\"mqttserver\" value=\"" + String(mqtt_server) + "\"></td>\n";  
+  ptr += "  </tr><tr>";
+  ptr += "  <td><lable for=\"mqttport\">Port</lable></td><td><input name=\"mqttport\" value=\"" + String(mqtt_port) + "\"></td>\n";    
+  ptr += "  </tr><tr>";
+  ptr += "  <td><lable for=\"mqttuser\">User</lable></td><td><input name=\"mqttuser\" value=\"" + String(mqtt_user) + "\"></td>\n";  
+  ptr += "  </tr><tr>";
+  ptr += "  <td><lable for=\"mqttpass\">Password</label></td><td><input name=\"mqttpass\" type=\"password\" value=\"\"></td>\n";      
+  ptr += "  </tr><tr>";
+  ptr += "  <td></td><td><br></td>";  
+  ptr += "  </tr><tr>";  
+  ptr += "  <td style=\"color: white;\"><b>Home Assistant</b></td><td></td>";    
+  ptr += "  </tr><tr>";
+  ptr += "  <td><lable for=\"mqtthatopic\">Discovery Topic</label></td><td><input name=\"mqtthatopic\" value=\"" + String(mqtt_ha_topic) + "\"></td>\n";  
+  ptr += "  </tr><tr>";
+  ptr += "  <td></td><td><br></td>";  
+  ptr += "  </tr><tr>";  
+  ptr += "  <td><input type=\"button\" class=\"button button-config\" value=\"Restart\" onclick=\"location.href='/restart';\"></td>";
+  ptr += "  <td><input type=\"submit\" class=\"button button-config\" value=\"Save\"></td>\n";  
+  ptr += "  </tr></table>";
+  ptr += "</form>\n";    
+
+  ptr += "<script type=\"text/javascript\">\n";  
+  ptr += "const apMode = document.querySelector(\".button-ap\");\n";
+  ptr += "apMode.addEventListener(\"click\", () => {";
+  //ptr += "if(confirm('After the reset, you must connect to the AP again and reconfigure everything! Do you really want to reset the entire configuration?'))";
+  ptr += "if(confirm('This activates the Wifi access point. You must then connect to the \"Flying Delorean\" AP and go to http://192.168.4.1. You can then adjust the Wifi settings. Do you want to activate the AP mode now?'))";
+  ptr += "window.location.href=\"/apmode\";})\n";  
+  ptr += "</script>\n";
+
+  ptr += "</body>\n";
+  ptr += "</html>\n";    
+  return ptr;  
+}
+
+String sendHTMLMenu() {  
+  String ptr = "<div class=\"off-screen-menu\">\n";    
+  ptr += "  <form>\n";
+  ptr += "    <input type=\"button\" class=\"button button-menu\" value=\"Home\" onclick=\"location.href='/';\">\n";  
+  ptr += "    <br>\n";  
+  ptr += "    <input type=\"submit\" class=\"button button-menu\" value=\"Did3D.fr\" onclick=\"window.open('https://www.did3d.fr', '_blank');\">\n";  
+  ptr += "    <br>\n";  
+  ptr += "    <input type=\"submit\" class=\"button button-menu\" value=\"Facebook\" onclick=\"window.open('https://www.facebook.com/groups/599517350568861', '_blank');\">\n";  
+  ptr += "    <br>\n";
+  ptr += "    <input type=\"submit\" class=\"button button-menu\" value=\"Github\" onclick=\"window.open('https://github.com/sequ3ster/esp_flying_delorean\', '_blank');\">\n";  
+  ptr += "    <br>\n";  
+  ptr += "    <input type=\"button\" class=\"button button-menu\" value=\"Update\" onclick=\"location.href='/ota';\">\n";    
+  ptr += "    <br>\n";    
+  ptr += "    <input type=\"button\" class=\"button button-menu\" value=\"Config\" onclick=\"location.href='/config';\">\n";  
+  ptr += "  </form>\n";
+  ptr += "</div>\n";
+
+  ptr += "  <nav>\n";
+  ptr += "    <div class=\"ham-menu\">\n";
+  ptr += "      <span></span>\n";
+  ptr += "      <span></span>\n";
+  ptr += "      <span></span>\n";
+  ptr += "    </div>\n";
+  ptr += "  </nav>\n";
+
+  ptr += "<script type=\"text/javascript\">\n";  
+  ptr += "const hamMenu = document.querySelector(\".ham-menu\");\n";
+  ptr += "const offScreenMenu = document.querySelector(\".off-screen-menu\");\n";
+  ptr += "hamMenu.addEventListener(\"click\", () => {\n";
+  ptr += "  hamMenu.classList.toggle(\"active\");\n";
+  ptr += "  offScreenMenu.classList.toggle(\"active\");\n";
+  ptr += "});\n";  
+  ptr += "</script>\n";  
+  return ptr;
+}
+
+String sendHTMLFooter() {  
+  String ptr = "<p><img src=\"/Did3d.webp\" alt=\"Did3D.fr\" class=\"did3d\" width=\"32\" height=\"32\"></p>\n";
+  ptr += "<div class=\"swversion\">v. " + swversion + "</div>";
+  return ptr;
+}
+
 String sendHTMLBody() {  
   String ptr = "<body>\n";  
-  ptr += "<p><img src=\"/BTTF2.webp\" alt=\"BTTF2\"></p>\n";
-  ptr += "<p><a href=\"https://www.did3d.fr\" class=\"did3d\" target=\"_blank\" rel=\"noopener noreferrer\"><img src=\"/Did3d.webp\" alt=\"Did3D.fr\"></a></p>\n";
+  ptr += sendHTMLMenu();
+  ptr += sendHTMLFooter();
   ptr += "<br>\n";
-  ptr += "<iframe src=\"/buttons\" height=\"220\" width=\"300\" title=\"Buttons\" frameBorder=\"0\"></iframe>\n";  
-  ptr += build_cfg_btn_form("Reset Config", "reset");  
- 
+  ptr += "<br>\n";
+  ptr += "<br>\n";
+  ptr += "<br>\n";
+  ptr += "<br>\n";
+  ptr += "<iframe src=\"/buttons\" height=\"220\" width=\"300\" title=\"Buttons\" frameBorder=\"0\" id=\"mainiframe\"></iframe>\n";    
+  
+  ptr += "</body>\n";
+  ptr += "</html>\n";  
+  return ptr;
+}
+
+String sendHTMLota() {  
+  String ptr = "<body>\n";  
+  ptr += sendHTMLMenu();
+  ptr += sendHTMLFooter();
+  ptr += "<br>\n";
+  ptr += "<br>\n";  
+  ptr += "<h1>Firmware Update</h1>\n";
+  ptr += "<p>You can download the latest version for the D1 mini here.</p>\n";
+  ptr += "<input type=\"button\" class=\"button button-config\" value=\"Download\" onclick=\"location.href='https://github.com/sequ3ster/esp_flying_delorean/raw/refs/heads/main/release/esp8266_D1_Mini_EspFlyingDelorean.latest.bin';\">\n";
+  ptr += "<br><p>After a successful update, please press Restart.</p>\n";
+  ptr += "<iframe src=\"/update\" height=\"120\" width=\"350\" title=\"Update\" frameBorder=\"0\" id=\"otaiframe\" scrolling=\"no\" onload=\"this.contentWindow.document.documentElement.scrollTop=130\"></iframe>\n";    
+  ptr += "<br><br><input type=\"button\" class=\"button button-config\" value=\"Restart\" onclick=\"location.href='/restart';\">\n";
   ptr += "</body>\n";
   ptr += "</html>\n";  
   return ptr;
@@ -656,7 +812,6 @@ String sendHTMLButtons() {
   ptr +=  build_btn_form("1", poweronoffState); 
   ptr += build_push_btn_form("Scene", "short", 1000);
   ptr += build_push_btn_form("Mode", "long", 3100);
- 
   ptr += "</body>\n";
   ptr += "</html>\n";
   return ptr;
@@ -769,10 +924,15 @@ void reconnect() {
       Serial.print("Attempting MQTT connection...");       
       String clientId = deviceId;
       if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {      
-        Serial.println("\033[1;32mconnected\033[0m");        
-//        publishDiscoveryConfig();
-        // Hier ggf. Command Topics abonnieren
-        // client.subscribe("mein_esp8266/switch/relay/command");
+        Serial.println("\033[1;32mconnected\033[0m");
+        if (mqtt_ha_topic != "") mqttHaDiscoveryConfig();
+        publishIpState();
+        publishMacState();
+        publishHostnameState();
+        publishSsidState();
+        publishBssidState();
+        
+        // Topic abo
         client.subscribe(powerCommandTopic.c_str());
       } else {
         Serial.print("\033[1;31mfailed, rc=");
@@ -787,24 +947,49 @@ void mqttloop()
 {
   if (!client.connected()) {
     reconnect();
-  } else {
-    if (ipAddress != WiFi.localIP()) { 
-      ipAddress = WiFi.localIP();
-      publishIpState();
-    }
-  }
+    if (!client.connected()) return;
+  } 
+
+  if (ipAddress != WiFi.localIP()) { 
+    ipAddress = WiFi.localIP();
+    publishIpState();
+    publishMacState();
+    publishHostnameState();
+    publishSsidState();
+    publishBssidState();
+  }  
+  
   client.loop();  
-  /*unsigned long now = millis();
-  if (now - lastMsg > 1000) {
+  unsigned long now = millis();
+  if (now - lastMsg > 10000) {
     lastMsg = now;
-    ++value;
-    snprintf (msg, MSG_BUFFER_SIZE, "hello world #%ld", value);
-    publishMotionState();
-    publishPowerState();  
-  }*/
+    publishRssiStateChange();
+    publishFreeRamStateChanged();
+  }
 }
 
-void CheckDeloreanIsFlying() {
+void publishRssiStateChange() {
+  if ((rssi <= WiFi.RSSI() -4 ) || (rssi >= WiFi.RSSI() +4)) { 
+    rssi = WiFi.RSSI();
+    publishRssiState();
+  }
+}
+
+void publishFreeRamStateChanged() {
+  if (freeRam != (ESP.getFreeHeap()/1024)) {
+    freeRam = (ESP.getFreeHeap()/1024);
+    publishFreeRamState();
+  }
+}
+
+void CheckInputs() {
+  powerstateState = analogRead(powerstate);  
+  boolean newPoweronoffState = (powerstateState > 300);
+  if(poweronoffState != newPoweronoffState) {
+    poweronoffState = newPoweronoffState;
+    publishPowerState();
+  }
+  
   LastDeloreanIsFlying = DeloreanIsFlying;
   ServoValue = pulseIn(PulseInPin, HIGH, 100000);
   if (LastServoValue != ServoValue) {
@@ -816,139 +1001,35 @@ void CheckDeloreanIsFlying() {
   if (LastDeloreanIsFlying != DeloreanIsFlying) {
     Serial.println("DeloreanIsFlying = " + String(DeloreanIsFlying));
     publishMotionState();
-  }
+  }  
 }
 
-void publishMotionConfig() {
-  // Verwende ArduinoJson für einfacheres Erstellen
-  StaticJsonDocument<256> doc; // Größe anpassen nach Bedarf
-  String docName = deviceName + " motion";
-  doc["name"] = docName; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["dev_cla"] = "motion"; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["stat_t"] = motionStateTopic;  
-  //doc["unit_of_measurement"] = "";
-  doc["value_template"] = "{{ value_json.motion|default(false) }}"; // Falls JSON gesendet wird
-  //doc["value_template"] = "{{ value }}"; // Wenn nur der Wert gesendet wird
-  doc["uniq_id"] = motionUniqueId; // "esp8266_AABBCCDDEEFF_temp"
-  //doc["force_update"] = true;  
-
-  // --- Geräteinformationen ---
-  JsonObject device = doc.createNestedObject("dev");
-  JsonArray identifiers = device.createNestedArray("ids");
-  identifiers.add(deviceId); // Füge den deviceId-String zum Array hinzu  
-  //identifiers.add(deviceMac); // Füge den deviceId-String zum Array hinzu  
-  device["name"] = deviceName; // "Mein ESP8266 Projekt"
-  //device["manufacturer"] = "sequ3ster";
-  //device["model"] = "Flysing Delorean V2";
-  //device["sw_version"] = "0.1";
-
-  String output;
-  serializeJson(doc, output);
-
-  Serial.print("Publishing config to: ");
-  Serial.println(motionConfigTopic);
-  Serial.println(output);
-  
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(motionConfigTopic.c_str(), output.c_str(), false)) { // true für retain
-     Serial.println("\033[1;31mFailed to publish motion config!\033[0m");
-  }
-  publishMotionState();
-
-  // *** Hier würden weitere Konfigurationen für andere Entitäten folgen ***
-  // z.B. für einen Schalter, mit dem gleichen "device"-Block, aber anderem
-  // "component", "name", "unique_id", "command_topic" etc.
-}
-
-void publishPowerConfig() {
-  // Verwende ArduinoJson für einfacheres Erstellen
-  StaticJsonDocument<180> doc; // Größe anpassen nach Bedarf
-  String docName = deviceName + " Power";
-  /*doc["name"] = docName; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["device_class"] = "switch"; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["command_topic"] = powerCommandTopic;  
-  doc["state_topic"] = powerStateTopic;  
-  //doc["unit_of_measurement"] = "";
-  //doc["value_template"] = "{{ value_json.motion|default(false) }}"; // Falls JSON gesendet wird
-  //doc["value_template"] = "{{ value }}"; // Wenn nur der Wert gesendet wird
-  doc["unique_id"] = powerUniqueId; // "esp8266_AABBCCDDEEFF_temp"
-  doc["force_update"] = true;*/
-
-  //doc["~"] = powerTopic;
-  doc["name"] = docName;
-  //doc["cmd_t"] = "~/set";
-  doc["cmd_t"] = powerCommandTopic;  
-  //doc["stat_t"] = "~/state";
-  doc["stat_t"] = powerStateTopic;
-  doc["uniq_id"] = powerUniqueId;
-  //doc["force_update"] = true;
-
-  // --- Geräteinformationen ---
-  JsonObject device = doc.createNestedObject("dev");
-  JsonArray identifiers = device.createNestedArray("ids");
-  identifiers.add(deviceId); // Füge den deviceId-String zum Array hinzu
-  //identifiers.add(deviceMac); // Füge den deviceId-String zum Array hinzu  
-  //device["name"] = deviceName; // "Mein ESP8266 Projekt"
-  //device["manufacturer"] = "sequ3ster";
-  //device["model"] = "Flysing Delorean V2";
-  //device["sw_version"] = "0.1";
-
-  String output;
-  serializeJson(doc, output);
-
-  Serial.print("Publishing config to: ");
-  Serial.print(powerConfigTopic);
-  Serial.println(" " + output); 
-
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(powerConfigTopic.c_str(), output.c_str(), false)) { // true für retain
-     Serial.println("\033[1;31mFailed to publish power config!\033[0m");
-  } 
-  publishPowerState();
-
-  // *** Hier würden weitere Konfigurationen für andere Entitäten folgen ***
-  // z.B. für einen Schalter, mit dem gleichen "device"-Block, aber anderem
-  // "component", "name", "unique_id", "command_topic" etc.
-}
-
-void mqttHaDiscoveryConfig() {
-  // Verwende ArduinoJson für einfacheres Erstellen
-  StaticJsonDocument<900> doc; // Größe anpassen nach Bedarf
-  //String docName = deviceName + " Power";
-  /*doc["name"] = docName; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["device_class"] = "switch"; // z.B. "Mein ESP8266 Projekt Temperatur"
-  doc["command_topic"] = powerCommandTopic;  
-  doc["state_topic"] = powerStateTopic;  
-  //doc["unit_of_measurement"] = "";
-  //doc["value_template"] = "{{ value_json.motion|default(false) }}"; // Falls JSON gesendet wird
-  //doc["value_template"] = "{{ value }}"; // Wenn nur der Wert gesendet wird
-  doc["unique_id"] = powerUniqueId; // "esp8266_AABBCCDDEEFF_temp"
-  doc["force_update"] = true;*/
-  
-  /*doc["name"] = docName; 
-  doc["cmd_t"] = powerCommandTopic;  
-  doc["stat_t"] = powerStateTopic;
-  doc["uniq_id"] = powerUniqueId;*/
-
-  // --- Geräteinformationen ---
-  /*JsonObject device = doc.createNestedObject("dev");
-  JsonArray identifiers = device.createNestedArray("ids");
-  identifiers.add(deviceId); */  
-  
+void mqttHaDiscoveryConfig() {  
+  StaticJsonDocument<2176> doc; 
   JsonObject device = doc.createNestedObject("dev"); // Device
   JsonArray identifiers = device.createNestedArray("ids");
   identifiers.add(deviceId); 
   //device["ids"] = deviceId;
   device["name"] = deviceName;  
-  device["mf"] = "did3d.fr";  
+  device["model"] = "Wifi Controller for Did3D Flying DELOREAN";
+  device["mf"] = "sequ3ster";  
   device["sn"] = ESP.getChipId();
-  device["hw"] = ESP.getFlashChipId();
-  //device["sw"] = ESP.getFullVersion();
+
+  #ifdef ESP8266
+    device["hw"] = "ESP8266 " + String(ESP.getFlashChipSize()/1048576) + " MB";
+  #endif
+
+  #ifdef ESP32
+    device["hw"] = "ESP32 " + String(ESP.getFlashChipSize()/1048576) + " MB";
+  #endif
+
+  device["sw"] = swversion;  
+  device["cu"] = "http://" + ipAddress.toString();
 
   JsonObject origin = doc.createNestedObject("o"); // Origin
   origin["name"] = "delorean2mqtt";
-  origin["sw"] = "0.3";
-  //origin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
+  origin["sw"] = "0.6";
+  origin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
   
   JsonObject components = doc.createNestedObject("cmps"); // Components
   JsonObject power = components.createNestedObject(powerUniqueId);
@@ -976,11 +1057,63 @@ void mqttHaDiscoveryConfig() {
   motion["stat_t"] = motionStateTopic;
   motion["uniq_id"] = motionUniqueId;
   
+  JsonObject macadd = components.createNestedObject(deviceId + "_mac");
+  macadd["p"] = "sensor"; //Platform
+  macadd["name"] = "MAC Address";  
+  macadd["ent_cat"] = "diagnostic";
+  macadd["ic"] = "mdi:network-pos";  
+  macadd["stat_t"] = "stat/" + deviceId + "/mac";
+  macadd["uniq_id"] = deviceId + "_mac";
+
+  JsonObject bssid = components.createNestedObject(deviceId + "_bssid");
+  bssid["p"] = "sensor"; //Platform
+  bssid["name"] = "Wifi BSSID";  
+  bssid["ent_cat"] = "diagnostic";
+  bssid["ic"] = "mdi:network-pos";  
+  bssid["stat_t"] = "stat/" + deviceId + "/bssid";
+  bssid["uniq_id"] = deviceId + "_bssid";
+
   JsonObject ipadd = components.createNestedObject(ipUniqueId);
   ipadd["p"] = "sensor"; //Platform
-  ipadd["name"] = "IP";  
+  ipadd["name"] = "IP Address";  
+  ipadd["ent_cat"] = "diagnostic";
+  ipadd["ic"] = "mdi:ip-network";
   ipadd["stat_t"] = ipStateTopic;
   ipadd["uniq_id"] = ipUniqueId;
+
+  JsonObject hostname = components.createNestedObject(deviceId + "_host");
+  hostname["p"] = "sensor"; //Platform
+  hostname["name"] = "Hostname";  
+  hostname["ent_cat"] = "diagnostic";
+  hostname["ic"] = "mdi:lan-connect";  
+  hostname["stat_t"] = "stat/" + deviceId + "/hostname";
+  hostname["uniq_id"] = deviceId + "_host";
+
+  JsonObject rssi = components.createNestedObject(deviceId + "_rssi");
+  rssi["p"] = "sensor"; //Platform
+  rssi["name"] = "Wifi RSSI";  
+  rssi["ent_cat"] = "diagnostic";
+  rssi["ic"] = "mdi:wifi";
+  rssi["unit_of_meas"] = "db";
+  rssi["stat_t"] = "stat/" + deviceId + "/rssi";
+  rssi["uniq_id"] = deviceId + "_rssi";
+
+  JsonObject ssid = components.createNestedObject(deviceId + "_ssid");
+  ssid["p"] = "sensor"; //Platform
+  ssid["name"] = "Wifi SSID";  
+  ssid["ent_cat"] = "diagnostic";
+  ssid["ic"] = "mdi:router-network-wireless";  
+  ssid["stat_t"] = "stat/" + deviceId + "/ssid";
+  ssid["uniq_id"] = deviceId + "_ssid";
+
+  JsonObject freeram = components.createNestedObject(deviceId + "_freeram");
+  freeram["p"] = "sensor"; //Platform
+  freeram["name"] = "Free RAM";  
+  freeram["ent_cat"] = "diagnostic";
+  freeram["ic"] = "mdi:memory";
+  freeram["unit_of_meas"] = "KByte";
+  freeram["stat_t"] = "stat/" + deviceId + "/freeram";
+  freeram["uniq_id"] = deviceId + "_freeram";
 
   String output;
   serializeJson(doc, output);
@@ -989,47 +1122,125 @@ void mqttHaDiscoveryConfig() {
   Serial.print(mqttDeviceConfigTopic);
   Serial.println(" " + output); 
 
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(mqttDeviceConfigTopic.c_str(), output.c_str(), false)) { // true für retain
+  
+  if (!client.publish(mqttDeviceConfigTopic.c_str(), output.c_str(), false)) { 
      Serial.println("\033[1;31mFailed to publish power config!\033[0m");
   } 
-  publishPowerState();
-
-  // *** Hier würden weitere Konfigurationen für andere Entitäten folgen ***
-  // z.B. für einen Schalter, mit dem gleichen "device"-Block, aber anderem
-  // "component", "name", "unique_id", "command_topic" etc.
-}
-
-void publishHADiscoveryConfig() {
-  mqttHaDiscoveryConfig();
-  //publishMotionConfig();
-  //publishPowerConfig();
+  publishPowerState();  
 }
 
 void unpublishHADiscoveryConfig() {
   client.publish(mqttDeviceConfigTopic.c_str(), "");
-  /*client.publish(motionConfigTopic.c_str(), "");
-  client.publish(motionStateTopic.c_str(), "");
-  client.publish(powerConfigTopic.c_str(), "");
-  client.publish(powerStateTopic.c_str(), "");
-  client.publish(powerCommandTopic.c_str(), "");    */
 }
 
 void publishIpState() {
   if(!client.connected()) return;
 
-  //StaticJsonDocument<30> doc;
-  //doc["motion"] = DeloreanIsFlying;
-
-  //String output;
-  //serializeJson(doc, output);
-
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(ipStateTopic);
   Serial.println("\033[1;37m \033[44m " + ipAddress.toString() + " \033[0m");
 
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(ipStateTopic.c_str(), ipAddress.toString().c_str(), true)) { // true für retain
+  if (!client.publish(ipStateTopic.c_str(), ipAddress.toString().c_str(), true)) { 
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishMacState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/mac";
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + WiFi.macAddress() + " \033[0m");
+  
+  if (!client.publish(topic.c_str(), WiFi.macAddress().c_str(), true)) {
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishHostnameState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/hostname";
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + WiFi.hostname() + " \033[0m");
+  
+  if (!client.publish(topic.c_str(), WiFi.hostname().c_str(), true)) { 
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishRssiState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/rssi";
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + String(WiFi.RSSI()) + " \033[0m");
+  
+  if (!client.publish(topic.c_str(), String(WiFi.RSSI()).c_str(), true)) { 
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishSsidState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/ssid";
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + String(WiFi.SSID()) + " \033[0m");
+  
+  if (!client.publish(topic.c_str(), String(WiFi.SSID()).c_str(), true)) { 
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+void publishBssidState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/bssid";
+  String output = macBytesToString(WiFi.BSSID());
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
+  
+  if (!client.publish(topic.c_str(), output.c_str(), true)) {
+     Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
+  }  
+}
+
+String macBytesToString(byte mac[6]) {
+  String macAddress = "";
+  for (int i = 0; i < 6; i++) {
+    if (mac[i] < 16) {
+      macAddress += "0";
+    }
+    macAddress += String(mac[i], HEX);
+    if (i < 5) {
+      macAddress += ":";
+    }
+  }
+  macAddress.toUpperCase();
+  return macAddress;
+}
+
+void publishFreeRamState() {
+  if(!client.connected()) return;
+
+  String topic = "stat/" + deviceId + "/freeram";
+
+  Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
+  Serial.print(topic);
+  Serial.println("\033[1;37m \033[44m " + String(freeRam) + " \033[0m");  
+
+  if (!client.publish(topic.c_str(), String(freeRam).c_str(), true)) { 
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1047,8 +1258,8 @@ void publishMotionState() {
   Serial.print(motionStateTopic);
   Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
 
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { // true für retain
+  
+  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) {
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1066,8 +1277,8 @@ void publishServoState() {
   Serial.print(servoStateTopic);
   Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
 
-  // Konfiguration mit Retain-Flag senden
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { // true für retain
+  
+  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { 
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1077,33 +1288,16 @@ void publishPowerState() {
 
   StaticJsonDocument<30> doc; 
   String output = String(poweronoffState ? "ON" : "OFF");
-
-  //doc["state"] = poweronoffState; 
-  //doc["switch"] = poweronoffState; 
-
-  /*if (poweronoffState) {
-    output = "ON"; 
-  } else {
-    output = "OFF";
-  }*/
-  
-  //output = String(poweronoffState);
-  //output = "{\"" + String(poweronoffState) + "\"}";
-  //serializeJson(doc, output);
   
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(powerStateTopic);
   Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
 
-  // Konfiguration mit Retain-Flag senden  
-  //if (!client.publish(powerCommandTopic.c_str(), output.c_str(), true)) { // true für retain
-  //client.publish(powerCommandTopic.c_str(), output.c_str(), true);
-  if (!client.publish(powerStateTopic.c_str(), output.c_str(), true)) { // true für retain
+  if (!client.publish(powerStateTopic.c_str(), output.c_str(), true)) { 
      Serial.println("\033[1;31mMQTT Failed to publish power state!\033[0m");
   }
 }
 
-// Dummy-Funktion für eingehende Nachrichten (Befehle)
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("\033[1;36mMQTT Message arrived\033[0m [");
   Serial.print(topic);
@@ -1114,12 +1308,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println("\033[0;30m]\033[46m " + message + " \033[0m");
 
-  // Hier Logik zur Befehlsverarbeitung einfügen
-  // z.B. if (String(topic) == "mein_esp8266/switch/relay/command") { ... }
   if (String(topic) = powerCommandTopic) {  
     if (!DeloreanIsFlying) {
-      poweronoffState = message == "ON";
-      digitalWrite(poweronoff, poweronoffState);
+      /*poweronoffState = message == "ON";
+      digitalWrite(poweronoff, poweronoffState);*/
+      digitalWrite(poweronoff, message == "ON");
     }
     publishPowerState();
     server.sendHeader("Location", "/",true);  
@@ -1127,7 +1320,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void loop() {    
-  CheckDeloreanIsFlying();  
+  CheckInputs();  
   server.handleClient();    
   matrixloop();  
   PushButton();
