@@ -17,7 +17,7 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 
 $${\color{red}WARNING!}$$: The car must never be switched on unless it is resting on its wheels in road mode,
 otherwise there is a risk of breaking the gears.
-This is why the on/off button and the mqtt power switch do not work when the Delorean is flying.
+This is why the on/off button on the website and the mqtt power switch do not work when the Delorean is flying.
 <br><br>
 
 [3D Printing STL](/stl)
@@ -27,10 +27,10 @@ This is why the on/off button and the mqtt power switch do not work when the Del
 [Firmware Installation](/installation)
 
 
-**Frontend**
-<br><img src="/images/Screenshot_20250416_210002_Chrome.jpg" width="300">
-<img src="/images/Screenshot_20250416_210016_Chrome.jpg" width="300">
-<img src="/images/Screenshot_20250416_210028_Chrome.jpg" width="300">
+<br><br>**Frontend**
+<br><img src="/images/Screenshot_20250416_210002_Chrome.jpg" width="250">
+<img src="/images/Screenshot_20250416_210016_Chrome.jpg" width="250">
+<img src="/images/Screenshot_20250416_210028_Chrome.jpg" width="250">
 <br><br>
 
 **Home Assistant**
