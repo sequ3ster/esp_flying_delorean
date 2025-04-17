@@ -15,6 +15,13 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 - EQ LED mod for the status indicator
 - Communication via MQTT (with Home Assistant Discovery Support)
 
+**Firmware**
+The released firmware is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Board.
+Feel free to build your own version with the Arduino IDE. Then you need also to upload the Data folter to LittleFS.
+
+**Installation**
+
+
 **Circut**
 <br><img src="/images/circuit_diagram.png" width="300">
 
@@ -34,5 +41,5 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 - <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
 - <img src="/images/AdafruitCharliePlex.jpg" width="300"><br>[Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White](https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss)
 - 1x 1k ohm 1/4 watt Resistor
-- 1x 180K ohm 1/4 watt Resistor
+- 2x 180K ohm 1/4 watt Resistor
 - 1x IRL510 Mosfet
