@@ -18,8 +18,18 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 **Circut**
 <img src="/images/circuit_diagram.png" width="300">
 
-**Screenshots**
-<img src="/images/Screenshot_20250405_155759_Chrome.jpg" width="300">
+**Access Point Mode**
+<img src="/images/Screenshot_20250416_210753_Chrome.jpg" width="300">
+<img src="/images/Screenshot_20250416_210802_Chrome.jpg" width="300">
+
+**Frontend**
+<img src="/images/Screenshot_20250416_210002_Chrome.jpg" width="300">
+<img src="/images/Screenshot_20250416_210007_Chrome.jpg" width="300">
+<img src="/images/Screenshot_20250416_210016_Chrome.jpg" width="300">
+<img src="/images/Screenshot_20250416_210028_Chrome.jpg" width="300">
+
+**Home Assistant**
+<img src="/images/Screenshot_20250417_094744_Home Assistant.jpg" width="300">
 
 **Hardware**
 - <img src="/images/D1MiniNodeMCU.png" width="300"><br>[ES8266 D1 mini](ES8266 D1 mini: https://de.aliexpress.com/item/1005006890254253.html)
