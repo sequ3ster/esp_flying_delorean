@@ -29,6 +29,7 @@ Feel free to build your own version with the Arduino IDE. Then you need also to 
 <br>For the firmware installation I can recommend the online tool from Espressif. [https://espressif.github.io/esptool-js/](https://espressif.github.io/esptool-js/)
 <br><img src="/images/esptool.png" width="300"><br>
 Use 115200 baud, address 0x0000 for the latest firmware and address 0x200000 for the littleFS image. The littleFS image contains images for the web frontend. $${\color{red}Attention!}$$ Flashing the littleFS image deletes the MQTT configuration.
+You only need to flash the littleFS image during the initial installation. Each firmware update can be installed OTA and you do not have to update the images again.
 <br><img src="/images/esptool_latest.png" width="300">
 <img src="/images/esptool_littlefs.png" width="300">
 <br><br>
