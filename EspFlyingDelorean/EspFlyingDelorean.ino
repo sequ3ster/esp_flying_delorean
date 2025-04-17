@@ -77,7 +77,7 @@ uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
 uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
 uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
 
-String swversion = "0.4 (beta)";
+String swversion = "0.5 (beta)";
 
 bool pushbuttonState = HIGH;
 bool poweronoffState = LOW;
@@ -420,7 +420,11 @@ void handle_savecfg() {
   SaveConfig();
 
   server.sendHeader("Location", "/",true);  
-  server.send(302, "text/plain", "");  
+  server.send(302, "text/plain", ""); 
+
+  delay(100);
+  ESP.restart();
+  delay(5000);
 }
 
 void handle_ap() {
@@ -798,7 +802,7 @@ String sendHTMLota() {
   ptr += "<br>\n";  
   ptr += "<h1>Firmware Update</h1>\n";
   ptr += "<p>You can download the latest version for the D1 mini here.</p>\n";
-  ptr += "<input type=\"button\" class=\"button button-config\" value=\"Download\" onclick=\"location.href='https://github.com/sequ3ster/esp_flying_delorean/raw/refs/heads/main/release/esp8266_D1_Mini_EspFlyingDelorean.latest.bin';\">\n";
+  ptr += "<input type=\"button\" class=\"button button-config\" value=\"Download\" onclick=\"location.href='https://github.com/sequ3ster/esp_flying_delorean/releases/latest/download/esp8266_D1_Mini_EspFlyingDelorean.bin';\">\n";
   ptr += "<br><p>After a successful update, please press Restart.</p>\n";
   ptr += "<iframe src=\"/update\" height=\"120\" width=\"350\" title=\"Update\" frameBorder=\"0\" id=\"otaiframe\" scrolling=\"no\" onload=\"this.contentWindow.document.documentElement.scrollTop=130\"></iframe>\n";    
   ptr += "<br><br><input type=\"button\" class=\"button button-config\" value=\"Restart\" onclick=\"location.href='/restart';\">\n";
@@ -917,7 +921,7 @@ void matrixloop() {
 }
 
 void reconnect() {
-  if (!client.connected()) {
+  if ((!client.connected()) & (0 < strlen(mqtt_server))) {
     unsigned long now = millis();
     if (now - lastTryConnect > 5000) {
       lastTryConnect = now;
