@@ -12,8 +12,8 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 - Switching the Delorean on/off
 - Changing the scenes
 - Changing the mode
-- EQ LED mod for the status indicator
 - Communication via MQTT (with Home Assistant Discovery Support)
+- EQ LED mod for the status indicator<br><img src="/images/Animation.gif" width="180">
 
 $${\color{red}WARNING!}$$: The car must never be switched on unless it is resting on its wheels in road mode,
 otherwise there is a risk of breaking the gears.
@@ -40,7 +40,6 @@ This is why the on/off button and the mqtt power switch do not work when the Del
 Every time the Deloren is Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
 you need another Wall-Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
 All STL Files you will get from Google Drive. Search in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
-<br><img src="/images/Animation.gif" width="180">
 <br><img src="/images/circuit_diagram_eq.png" width="600">
 <br><br>
 
