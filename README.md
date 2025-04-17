@@ -35,6 +35,7 @@ You only need to flash the littleFS image during the initial installation. Each 
 <br><br>
 
 **Access Point Mode**
+<br>When both Images are flashed to the ESP8266, you need to restart the Controller via RST button or power cycle it. Please connect your phone to the Wifi “Flying Delorean”. Then open your browser and go to 192.168.4.1. There you can connect the Wifi Controller to your Wifi network. You can also configure the MQTT Config. Every time you want to change the Wifi settings, you have to go back to AP mode. You will find a button for this in the [configuration menu](/images/Screenshot_20250416_210028_Chrome.jpg).
 <br><img src="/images/Screenshot_20250416_210753_Chrome.jpg" width="300">
 <img src="/images/Screenshot_20250416_210802_Chrome.jpg" width="300">
 <br><br>
