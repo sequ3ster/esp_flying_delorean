@@ -4,8 +4,7 @@
 [Didier Picard](https://www.did3d.fr) has created an impressive 3D model of a [flying Delorean from Back to the Future Part II](https://www.cgtrader.com/3d-print-models/miniatures/vehicles/flying-delorean-v2-hq-1-8-scale-530mm-3d-print-model).
 This model is animatronic and can be controlled via a button on the bottom. The LEDs, servos and sound module are controlled by an Arduino Nano. As there is already a lot to control, all the outputs of the Arduino Nano are used. This leaves no room for expansion.
 
-But there is a solution: a second microcontroller.
-In Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented with a second Arduino Nano. I also wanted to implement this mod for the Flying Delorean. I also had the idea of using an ESP8266 to control the Arduino. So the idea for this project “ESP Flying Deloren” was born.
+In Didier's first Delorean model, an EQ LED panel MOD for the status indicator was already implemented, but with a second Arduino Nano. Because this version has also no room for expansion. I also wanted to implement this mod for the Flying Delorean and I had the idea of using an ESP8266 to control the Arduino. So the idea for this project “ESP Flying Deloren” with EQ LED Mod was born.
 <br><br>
 
 **Functions**
@@ -18,18 +17,18 @@ In Didier's first Delorean model, an EQ LED panel MOD for the status indicator w
 
 $${\color{red}WARNING!}$$: The car must never be switched on unless it is resting on its wheels in road mode,
 otherwise there is a risk of breaking the gears.
-The On/Off Button and also the mqtt power switch don't work when the Delorean is flying.
+This is why the on/off button and the mqtt power switch do not work when the Delorean is flying.
 <br><br>
 
 **Firmware**
-<br>The released firmware is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Board.
+<br>The released firmware is for the D1 Mini (Clone). But maybe it works also for other ESP8266 Boards.
 Feel free to build your own version with the Arduino IDE. Then you need also to upload the Data folter to LittleFS.
 <br><br>
 
 **Installation**
 <br>For the firmware installation I can recommend the online tool from Espressif. [https://espressif.github.io/esptool-js/](https://espressif.github.io/esptool-js/)
 <br><img src="/images/esptool.png" width="300"><br>
-Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for the littleFS Image. The littleFS Image contains pictures for the Web Frontend.
+Use 115200 baud, address 0x0000 for the latest firmware and address 0x200000 for the littleFS image. The littleFS image contains images for the web frontend. $${\color{red}Attention!}$$ Flashing the littleFS image deletes the MQTT configuration.
 <br><img src="/images/esptool_latest.png" width="300">
 <img src="/images/esptool_littlefs.png" width="300">
 <br><br>
@@ -50,7 +49,7 @@ Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for
 <br><br>
 
 **Circut**
-<br><img src="/images/circuit_diagram.png" width="600">
+<br><img src="/images/circuit_diagram.png" width="428">
 <br><br>
 
 **Hardware**
@@ -61,7 +60,11 @@ Use 115200 Baud, Address 0x0000 for the latest Firmware and Address 0x200000 for
 <br><br>
 
 **EQ LED Mod Circut**
-<br><img src="/images/circuit_diagram.png" width="600">
+<br>For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini.
+Evety time the Deloren ist Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
+you need another Wall Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
+All STL Files you will get Google Drive. Sear in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
+<br><img src="/images/circuit_diagram_eq.png" width="600">
 <br><br>
 
 **Additional Hardware for EQ LED Mod**
