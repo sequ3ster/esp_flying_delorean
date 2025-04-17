@@ -65,7 +65,7 @@ You only need to flash the littleFS image during the initial installation. Each 
 <br>For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini.
 Evety time the Deloren ist Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
 you need another Wall Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
-All STL Files you will get Google Drive. Sear in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
+All STL Files you will get Google Drive. Search in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
 <br><img src="/images/circuit_diagram_eq.png" width="600">
 <br><br>
 
