@@ -25,6 +25,6 @@ A1 to A4 from the Arduino control the servos. The D1 Mini uses A1 to check wheth
 For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini.
 Every time the Deloren is Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
 you need another Wall-Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
-All STL Files you will get from Google Drive. Search in your purchased Files for "Link to GOOGLEDRIVE_FlyDELOREAN2_Did3D(UPDATE).txt".
+All STL Files you will find [here](/stl).
 <br><img src="/circuit/circuit_diagram_eq.png" width="600">
 <br><br>
