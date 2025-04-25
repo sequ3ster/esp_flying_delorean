@@ -4,7 +4,7 @@
 - <img src="/images/D1MiniNodeMCU.png" width="100"><br>[ES8266 D1 mini (Clone)](https://de.aliexpress.com/item/1005006890254253.html)
 - 2x 1k ohm 1/4 watt Resistor
 - 1x 47k ohm 1/4 watt Resistor
-- 2x 180K ohm 1/4 watt Resistor
+- 2x 100 ~ 180K ohm 1/4 watt Resistor
 - 1x IRLZ44N Mosfet
 <br><br>
   
