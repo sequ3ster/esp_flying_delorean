@@ -299,6 +299,7 @@ void setup() {
   mqttDeviceConfigTopic = String(mqtt_ha_topic) + "/device/" + deviceId + "/config";
   ipStateTopic = "stat/" + deviceId + "/ip";
   motionStateTopic = "stat/" + deviceId + "/motion";
+  servoStateTopic = "stat/" + deviceId + "/servo";
   shortUniqueId = deviceId + "_short";
   shortcmndTopic = "cmnd/" + deviceId + "/short";
   longUniqueId = deviceId + "_long";
@@ -1066,7 +1067,17 @@ void mqttHaDiscoveryConfig() {
   motion["name"] = "Motion";  
   motion["stat_t"] = motionStateTopic;
   motion["uniq_id"] = motionUniqueId;
-  
+  //motion["pl_on"] = "true";
+  //motion["pl_on"] = 1;
+  //motion["val_tpl"] = "{{ motion(value) }}";
+
+  JsonObject servo = components.createNestedObject(motionUniqueId);
+  servo["p"] = "sensor"; //Platform
+  servo["name"] = "Servo";  
+  servo["stat_t"] = servoStateTopic;
+  servo["uniq_id"] = deviceId + "_servo";  
+  servo["unit_of_meas"] = "°";
+
   JsonObject macadd = components.createNestedObject(deviceId + "_mac");
   macadd["p"] = "sensor"; //Platform
   macadd["name"] = "MAC Address";  
@@ -1261,15 +1272,18 @@ void publishMotionState() {
   StaticJsonDocument<30> doc;
   doc["motion"] = DeloreanIsFlying;
 
-  String output;
-  serializeJson(doc, output);
+  //String output;
+  //serializeJson(doc, output);
+  String output = (DeloreanIsFlying ? "true" : "false");
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(motionStateTopic);
-  Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
+  //Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
+  Serial.println("\033[1;37m \033[44m " + String(DeloreanIsFlying) + " \033[0m");
 
   
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) {
+  //if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) {
+  if (!client.publish(motionStateTopic.c_str(), String(DeloreanIsFlying).c_str(), true)) {    
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1285,10 +1299,12 @@ void publishServoState() {
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(servoStateTopic);
-  Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
+  //Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
+  Serial.println("\033[1;37m \033[44m" + String(ServoValue / 10) + " \033[0m");
 
   
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { 
+  //if (!client.publish(servoStateTopic.c_str(), output.c_str(), true)) { 
+  if (!client.publish(servoStateTopic.c_str(), String(ServoValue / 10).c_str(), true)) { 
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
