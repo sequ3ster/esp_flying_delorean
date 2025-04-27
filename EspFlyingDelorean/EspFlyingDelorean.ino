@@ -77,7 +77,7 @@ uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
 uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
 uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
 
-String swversion = "0.5 (beta)";
+String swversion = "0.6 (beta)";
 
 bool pushbuttonState = HIGH;
 bool poweronoffState = LOW;
@@ -156,19 +156,26 @@ void SaveConfig () {
     //end save
 }
 
+void setupMosfet() {   
+  // IRF9540 datasheet https://www.vishay.com/docs/91078/91078.pdf
+  poweronoffState = LOW;    
+  pinMode(poweronoff, OUTPUT);
+  digitalWrite(poweronoff, poweronoffState);  
+}
+
 void setup() {
   Serial.begin(74800);
+
+  setupMosfet();
+
   pinMode(pushbutton, OUTPUT);
-  pinMode(poweronoff, OUTPUT);
   pinMode(StatusIndicator, OUTPUT);
   pinMode(PulseInPin, INPUT);
   pinMode(powerstate, INPUT);
-  pushbuttonState = HIGH;
-  poweronoffState = LOW;
+  pushbuttonState = HIGH;  
   powerstateState = 0;
   StatusIndicatorState = HIGH;
-  digitalWrite(pushbutton, pushbuttonState);
-  digitalWrite(poweronoff, poweronoffState);
+  digitalWrite(pushbutton, pushbuttonState);  
   digitalWrite(StatusIndicator, StatusIndicatorState);
 
  //read configuration from FS json
@@ -382,9 +389,8 @@ void handle_btn() {
   if (btnPin == "1") {
     Serial.println("power on/off");    
     if (!DeloreanIsFlying) {
-      /*poweronoffState = evaluate_btn_state(btnState);
-      digitalWrite(poweronoff, poweronoffState);*/
-      digitalWrite(poweronoff, evaluate_btn_state(btnState));
+      poweronoffState = evaluate_btn_state(btnState);
+      digitalWrite(poweronoff, poweronoffState);
     }
     publishPowerState();
   } else if (btnPin == "2") {      
@@ -1313,10 +1319,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println("\033[0;30m]\033[46m " + message + " \033[0m");
 
   if (String(topic) = powerCommandTopic) {  
-    if (!DeloreanIsFlying) {
-      /*poweronoffState = message == "ON";
-      digitalWrite(poweronoff, poweronoffState);*/
-      digitalWrite(poweronoff, message == "ON");
+    if (!DeloreanIsFlying) {      
+      poweronoffState = message == "ON";
+      digitalWrite(poweronoff, poweronoffState);
     }
     publishPowerState();
     server.sendHeader("Location", "/",true);  
