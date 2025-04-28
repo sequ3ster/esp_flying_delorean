@@ -77,7 +77,7 @@ uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
 uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
 uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
 
-String swversion = "0.5 (beta)";
+String swversion = "0.6 (beta)";
 
 bool pushbuttonState = HIGH;
 bool poweronoffState = LOW;
@@ -156,19 +156,26 @@ void SaveConfig () {
     //end save
 }
 
+void setupMosfet() {   
+  // IRF9540 datasheet https://www.vishay.com/docs/91078/91078.pdf
+  poweronoffState = LOW;    
+  pinMode(poweronoff, OUTPUT);
+  digitalWrite(poweronoff, poweronoffState);  
+}
+
 void setup() {
   Serial.begin(74800);
+
+  setupMosfet();
+
   pinMode(pushbutton, OUTPUT);
-  pinMode(poweronoff, OUTPUT);
   pinMode(StatusIndicator, OUTPUT);
   pinMode(PulseInPin, INPUT);
   pinMode(powerstate, INPUT);
-  pushbuttonState = HIGH;
-  poweronoffState = LOW;
+  pushbuttonState = HIGH;  
   powerstateState = 0;
   StatusIndicatorState = HIGH;
-  digitalWrite(pushbutton, pushbuttonState);
-  digitalWrite(poweronoff, poweronoffState);
+  digitalWrite(pushbutton, pushbuttonState);  
   digitalWrite(StatusIndicator, StatusIndicatorState);
 
  //read configuration from FS json
@@ -292,6 +299,7 @@ void setup() {
   mqttDeviceConfigTopic = String(mqtt_ha_topic) + "/device/" + deviceId + "/config";
   ipStateTopic = "stat/" + deviceId + "/ip";
   motionStateTopic = "stat/" + deviceId + "/motion";
+  servoStateTopic = "stat/" + deviceId + "/servo";
   shortUniqueId = deviceId + "_short";
   shortcmndTopic = "cmnd/" + deviceId + "/short";
   longUniqueId = deviceId + "_long";
@@ -382,9 +390,8 @@ void handle_btn() {
   if (btnPin == "1") {
     Serial.println("power on/off");    
     if (!DeloreanIsFlying) {
-      /*poweronoffState = evaluate_btn_state(btnState);
-      digitalWrite(poweronoff, poweronoffState);*/
-      digitalWrite(poweronoff, evaluate_btn_state(btnState));
+      poweronoffState = evaluate_btn_state(btnState);
+      digitalWrite(poweronoff, poweronoffState);
     }
     publishPowerState();
   } else if (btnPin == "2") {      
@@ -1060,7 +1067,17 @@ void mqttHaDiscoveryConfig() {
   motion["name"] = "Motion";  
   motion["stat_t"] = motionStateTopic;
   motion["uniq_id"] = motionUniqueId;
-  
+  //motion["pl_on"] = "true";
+  //motion["pl_on"] = 1;
+  //motion["val_tpl"] = "{{ motion(value) }}";
+
+  JsonObject servo = components.createNestedObject(motionUniqueId);
+  servo["p"] = "sensor"; //Platform
+  servo["name"] = "Servo";  
+  servo["stat_t"] = servoStateTopic;
+  servo["uniq_id"] = deviceId + "_servo";  
+  servo["unit_of_meas"] = "°";
+
   JsonObject macadd = components.createNestedObject(deviceId + "_mac");
   macadd["p"] = "sensor"; //Platform
   macadd["name"] = "MAC Address";  
@@ -1255,15 +1272,18 @@ void publishMotionState() {
   StaticJsonDocument<30> doc;
   doc["motion"] = DeloreanIsFlying;
 
-  String output;
-  serializeJson(doc, output);
+  //String output;
+  //serializeJson(doc, output);
+  String output = (DeloreanIsFlying ? "true" : "false");
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(motionStateTopic);
-  Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
+  //Serial.println("\033[1;37m \033[44m " + output + " \033[0m");
+  Serial.println("\033[1;37m \033[44m " + String(DeloreanIsFlying) + " \033[0m");
 
   
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) {
+  //if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) {
+  if (!client.publish(motionStateTopic.c_str(), String(DeloreanIsFlying).c_str(), true)) {    
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1279,10 +1299,12 @@ void publishServoState() {
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(servoStateTopic);
-  Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
+  //Serial.println("\033[1;37m \033[44m" + output + " \033[0m");
+  Serial.println("\033[1;37m \033[44m" + String(ServoValue / 10) + " \033[0m");
 
   
-  if (!client.publish(motionStateTopic.c_str(), output.c_str(), true)) { 
+  //if (!client.publish(servoStateTopic.c_str(), output.c_str(), true)) { 
+  if (!client.publish(servoStateTopic.c_str(), String(ServoValue / 10).c_str(), true)) { 
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1313,10 +1335,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println("\033[0;30m]\033[46m " + message + " \033[0m");
 
   if (String(topic) = powerCommandTopic) {  
-    if (!DeloreanIsFlying) {
-      /*poweronoffState = message == "ON";
-      digitalWrite(poweronoff, poweronoffState);*/
-      digitalWrite(poweronoff, message == "ON");
+    if (!DeloreanIsFlying) {      
+      poweronoffState = message == "ON";
+      digitalWrite(poweronoff, poweronoffState);
     }
     publishPowerState();
     server.sendHeader("Location", "/",true);  
