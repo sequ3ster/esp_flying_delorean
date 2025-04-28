@@ -32,7 +32,7 @@ The D1 Mini uses A1 (Ft Servo) to check whether the Delorean is flying. The conn
 <br><img src="/circuit/circuit_diagram.png" width="428">
 <br><br>
 
-## Wifi Control wWith EQ LED Mod
+## Wifi Control with EQ LED Mod
 
 The same as with the two individual mods. Except that A0 is not connected to 3.3V, but to the drain of the mosfet. RX remains open and is not connected to ground.
 <br><img src="/circuit/circuit_diagram_eq.png" width="600">
