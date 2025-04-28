@@ -4,11 +4,12 @@
   <tr><td><b>Parts</td><td><b>EQ LED Mod</td><td><b>Wifi Mod</td><td><b>Wifi and EQ LED</td></tr>
   <tr><td><img src="/images/D1MiniNodeMCU.png" width="50"><br><a href="https://de.aliexpress.com/item/1005006890254253.html">ES8266 D1 mini (Clone)</a></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
   <tr><td><img src="/images/AdafruitCharliePlex.jpg" width="50"><br><a href="https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss">Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White</a></td><td>$${\color{green}✓}$$</td><td></td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td>2x 1k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td>2x 10k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td>1x 180k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/1005006189547427.html">2x 1k ohm 1/4 watt Resistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/1005006189547427.html">2x 10k ohm 1/4 watt Resistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>  
+  <tr><td><a href="https://aliexpress.com/item/1005006189547427.html">1x 180k ohm 1/4 watt Resistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/1005006189547427.html">1x 220k ohm 1/4 watt Resistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>    
   <tr><td><a href="https://aliexpress.com/item/1005007830470028.html">1x BC547C Transistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td><a href="https://aliexpress.com/item/1005007445949053.html">1x IRF9540 Mosfet</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/33009989924.html">1x IRF9540 Mosfet</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
 </table>
 <br>
   
