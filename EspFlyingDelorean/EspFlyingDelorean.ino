@@ -76,8 +76,9 @@ uint8_t pushbutton = 12; //ESP8266 GPIO12 = D6 --- 470-1k ohm
 uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
 uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
 uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
+uint8_t eqModOnly = 3; // ESP8266 GPIO3 = RX --- to Ground if only the EQ mod is required
 
-String swversion = "0.6 (beta)";
+String swversion = "0.7 (beta)";
 
 bool pushbuttonState = HIGH;
 bool poweronoffState = LOW;
@@ -87,6 +88,7 @@ bool LastDeloreanIsFlying = false;
 int ServoValue = 0; 
 int LastServoValue = 0; 
 int powerstateState = 0;
+int rxinput = 0;
 
 // --- MQTT Device ---
 String mac = WiFi.macAddress(); // Eindeutige Basis für IDs
@@ -163,22 +165,8 @@ void setupMosfet() {
   digitalWrite(poweronoff, poweronoffState);  
 }
 
-void setup() {
-  Serial.begin(74800);
-
-  setupMosfet();
-
-  pinMode(pushbutton, OUTPUT);
-  pinMode(StatusIndicator, OUTPUT);
-  pinMode(PulseInPin, INPUT);
-  pinMode(powerstate, INPUT);
-  pushbuttonState = HIGH;  
-  powerstateState = 0;
-  StatusIndicatorState = HIGH;
-  digitalWrite(pushbutton, pushbuttonState);  
-  digitalWrite(StatusIndicator, StatusIndicatorState);
-
- //read configuration from FS json
+void setupWifi() {
+  //read configuration from FS json
   Serial.println("mounting FS...");
 
   if (SPIFFS.begin()) {
@@ -265,7 +253,7 @@ void setup() {
   strcpy(mqtt_password, custom_mqtt_password.getValue());  
   strcpy(mqtt_ha_topic, custom_mqtt_ha_topic.getValue());  
 
-//save the custom parameters to FS
+  //save the custom parameters to FS
   if (shouldSaveConfig) {
     SaveConfig();
   }
@@ -311,6 +299,27 @@ void setup() {
   client.setServer(mqtt_server, String(mqtt_port).toInt());
   client.setCallback(callback);  
   client.setBufferSize(2176);
+}
+
+void setup() {
+  Serial.begin(74800);
+
+  setupMosfet();
+
+  pinMode(pushbutton, OUTPUT);
+  pinMode(StatusIndicator, OUTPUT);
+  pinMode(PulseInPin, INPUT);
+  pinMode(powerstate, INPUT);
+  pushbuttonState = HIGH;  
+  powerstateState = 0;
+  StatusIndicatorState = HIGH;
+  digitalWrite(pushbutton, pushbuttonState);  
+  digitalWrite(StatusIndicator, StatusIndicatorState);
+
+  pinMode(eqModOnly, INPUT_PULLUP);
+  rxinput = digitalRead(eqModOnly);
+
+  if (rxinput == 1) setupWifi();
 
   // Check if is something connected to SDA (D4)
   pinMode(D4, OUTPUT);
@@ -1039,7 +1048,7 @@ void mqttHaDiscoveryConfig() {
 
   JsonObject origin = doc.createNestedObject("o"); // Origin
   origin["name"] = "delorean2mqtt";
-  origin["sw"] = "0.6";
+  origin["sw"] = "0.7";
   origin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
   
   JsonObject components = doc.createNestedObject("cmps"); // Components
@@ -1345,10 +1354,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void loop() {    
-  CheckInputs();  
-  server.handleClient();    
+  rxinput = digitalRead(eqModOnly);
+
+  if (rxinput == 1) {
+    CheckInputs();  
+    server.handleClient();      
+    PushButton();
+    mqttloop();  
+  }
   matrixloop();  
-  PushButton();
-  mqttloop();
 }
 
