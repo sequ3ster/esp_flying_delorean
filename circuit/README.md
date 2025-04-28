@@ -1,20 +1,17 @@
 # Circuit
 
-**Hardware**
-- <img src="/images/D1MiniNodeMCU.png" width="100"><br>[ES8266 D1 mini (Clone)](https://de.aliexpress.com/item/1005006890254253.html)
-- 2x 1k ohm 1/4 watt Resistor
-- 2x 10k ohm 1/4 watt Resistor
-- 1x 180k ohm 1/4 watt Resistor
-- 1x 220k ohm 1/4 watt Resistor
-- 1x BC547C Transistor
-- 1x IRLZ44N Mosfet
-<br><br>
+<table>
+  <tr><td><b>Parts</td><td><b>EQ LED Mod</td><td><b>Wifi Mod</td><td><b>Both</td></tr>
+  <tr><td><img src="/images/D1MiniNodeMCU.png" width="50"><br><a href="https://de.aliexpress.com/item/1005006890254253.html">ES8266 D1 mini (Clone)</a></td><td>X</td><td>X</td><td>X</td></tr>
+  <tr><td><img src="/images/AdafruitCharliePlex.jpg" width="50"><br><a href="https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss">Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White</a></td><td>X</td><td></td><td>X</td></tr>
+  <tr><td>2x 1k ohm 1/4 watt Resistor</td><td></td><td>X</td><td>X</td></tr>
+  <tr><td>2x 10k ohm 1/4 watt Resistor</td><td></td><td>X</td><td>X</td></tr>
+  <tr><td>1x 180k ohm 1/4 watt Resistor</td><td></td><td>X</td><td>X</td></tr>
+  <tr><td>1x BC547C Transistor</td><td></td><td>X</td><td>X</td></tr>
+  <tr><td>1x IRLZ44N Mosfet</td><td></td><td>X</td><td>X</td></tr>
+</table>
+<br>
   
-**Additional Hardware for EQ LED Mod**
-
-- <img src="/images/AdafruitCharliePlex.jpg" width="200"><br>[Adafruid 15x7 CharliPlex LED Matrix FeatherWing Warm White](https://www.berrybase.de/adafruit-15x7-charlieplex-led-matrix-featherwing-warmweiss)
-<br><br>
-
 ## Only EQ LED Mod
 
 For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini. Connect also RX to Ground and A0 to 3.3V. 
