@@ -13,7 +13,7 @@
 </table>
 <br>
   
-## Only EQ LED Mod
+## EQ LED Mod only
 
 For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini. Connect also RX to Ground and A0 to 3.3V. 
 Every time the Deloren is Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
