@@ -7,8 +7,8 @@
   <tr><td>2x 1k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
   <tr><td>2x 10k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
   <tr><td>1x 180k ohm 1/4 watt Resistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td>1x BC547C Transistor</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
-  <tr><td>1x IRF9540 Mosfet</td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/1005007830470028.html">1x BC547C Transistor</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
+  <tr><td><a href="https://aliexpress.com/item/1005007445949053.html">1x IRF9540 Mosfet</a></td><td></td><td>$${\color{green}✓}$$</td><td>$${\color{green}✓}$$</td></tr>
 </table>
 <br>
   
