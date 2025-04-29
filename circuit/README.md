@@ -15,7 +15,7 @@
   
 ## EQ LED Mod only
 
-For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini. Connect also RX to Ground and A0 to 3.3V. 
+For the EQ LED Mod you only need to connect the Adafruid CharlyPlex to 3.3V, GND, SDA and SCL from the D1 mini. Connect also A0 to 3.3V and RX to Ground. RX to Ground will deactivate Wifi. In that case, the D1 mini will not create an unsafe Access Point for configuration. 
 Every time the Deloren is Power on, the CharlyPlex will start the LED Animation for the Status Indicator. This Mod need more room, therefore
 you need another Wall-Rear for the Deloren. Also you need anoter EQ-Defusor and EQ-Front.
 All STL Files you will find [here](/stl).
@@ -32,6 +32,6 @@ The D1 Mini uses A1 (Ft Servo) to check whether the Delorean is flying. The conn
 
 ## Wifi Control with EQ LED Mod
 
-The same as with the two mods above. Except that A0 is not connected to 3.3V, but to the drain of the mosfet. RX remains open and is not connected to ground.
+The same as with the two mods above. Except that A0 is not connected to 3.3V, but to the drain of the mosfet. RX remains open and is not connected to ground. Because RX to Ground will deactivate Wifi.
 <br><img src="/circuit/circuit_diagram_eq.png" width="600">
 <br><br>
