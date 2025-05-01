@@ -26,11 +26,11 @@ This is why the on/off button on the website and the mqtt power switch do not wo
 <br><br>
 
 <br><br>**Frontend**
-<br><img src="/images/Screenshot_20250416_210002_Chrome.jpg" width="250">
-<img src="/images/Screenshot_20250416_210016_Chrome.jpg" width="250">
-<img src="/images/Screenshot_20250416_210028_Chrome.jpg" width="250">
+<br><img src="/images/Screenshot_20250416_210002_Chrome_.jpg" width="250">
+<img src="/images/Screenshot_20250416_210016_Chrome_.jpg" width="250">
+<img src="/images/Screenshot_20250416_210028_Chrome_.jpg" width="250">
 <br><br>
 
 **Home Assistant**
-<br><img src="/images/Screenshot_20250427_221001_Home Assistant.jpg" width="750">
+<br><img src="/images/Screenshot_20250427_221001_Home Assistant_.jpg" width="750">
 <br><br>
