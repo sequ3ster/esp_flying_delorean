@@ -43,48 +43,38 @@ ESP8266WebServer server(port);
 //flag for saving data
 bool shouldSaveConfig = false;
 
-int MatrixBitmap=1;
+uint8_t MatrixBitmap=1;
+uint16_t ServoValue = 0; 
+uint16_t LastServoValue = 0; 
+int16_t powerstateState = 0;
+
 bool MatrixConnected=false;
+bool pushbuttonState = HIGH;
+bool poweronoffState = LOW;
+bool StatusIndicatorState = HIGH; 
+bool DeloreanIsFlying = false; 
 
 unsigned long previousTime = 0; 
 unsigned long previousBitmapTime = 0; 
 unsigned long TimeOutButton = 0; 
 unsigned long startTimeButton = 0; 
 unsigned long LastTimeFlying = 0; 
+unsigned long timeoutTimeButton = 0;
 
-const long timeoutTime = 200;
-long timeoutTimeButton = 0;
+const char swversion[15] = "0.8 (beta)";
 
-uint8_t PulseInPin = 13; // ESP8266 PulseIn = D7 --- 180k ohm
-uint8_t pushbutton = 12; //ESP8266 GPIO12 = D6 --- 470-1k ohm
-uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
-uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
-uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
-uint8_t eqModOnly = 3; // ESP8266 GPIO3 = RX --- to Ground if only the EQ mod is required
-
-String swversion = "0.8 (beta)";
-
-bool pushbuttonState = HIGH;
-bool poweronoffState = LOW;
-bool StatusIndicatorState = HIGH; 
-bool DeloreanIsFlying = false; 
-bool LastDeloreanIsFlying = false; 
-int ServoValue = 0; 
-int LastServoValue = 0; 
-int powerstateState = 0;
-int rxinput = 0;
+const uint8_t PulseInPin = 13; // ESP8266 PulseIn = D7 --- 180k ohm
+const uint8_t pushbutton = 12; //ESP8266 GPIO12 = D6 --- 470-1k ohm
+const uint8_t poweronoff = 14; //ESP8266 GPIO14 = D5 --- Mosfet IRL510
+const uint8_t powerstate = A0; //ESP8266 ADC0 = A0 --- 180k ohm
+const uint8_t StatusIndicator = 2; //ESP8266 GPIO2 = D4
+const uint8_t eqModOnly = 3; // ESP8266 GPIO3 = RX --- to Ground if only the EQ mod is required
 
 // --- MQTT Device ---
 String mac = WiFi.macAddress(); // Eindeutige Basis für IDs
 String deviceId;
-String ipUniqueId;
-String motionUniqueId;
-String powerUniqueId;
-String shortUniqueId;
 String shortcmndTopic;
-String longUniqueId;
 String longcmndTopic;
-String deviceName = "Flying Delorean";
 String mqttDeviceConfigTopic;
 String deviceConfigTopic;
 String ipStateTopic;
@@ -92,18 +82,15 @@ String motionStateTopic;
 String servoStateTopic;
 String powerStateTopic;
 String powerCommandTopic;
-int8_t rssi;
+int8_t wifiRssi;
 int8_t freeRam;
 IPAddress ipAddress;
-
+#define MSG_BUFFER_SIZE	(2432)
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 unsigned long lastMsg = 0;
 unsigned long lastTryConnect = 0;
-#define MSG_BUFFER_SIZE	(50)
-char msg[MSG_BUFFER_SIZE];
-int value = 0;
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
@@ -149,7 +136,7 @@ void setupMosfet() {
   digitalWrite(poweronoff, poweronoffState);  
 }
 
-void setupWifi() {
+void setupReadConfig() {
   //read configuration from FS json
   Serial.println("mounting FS...");
 
@@ -195,7 +182,9 @@ void setupWifi() {
     Serial.println("\033[1;31mfailed to mount FS\033[0m");
   }
   //end read
-  
+}
+
+void setupWifi() {  
   // The extra parameters to be configured (can be either global or just in the setup)
   // After connecting, parameter.getValue() will get you the configured value
   // id/name placeholder/prompt default length
@@ -241,10 +230,11 @@ void setupWifi() {
   if (shouldSaveConfig) {
     SaveConfig();
   }
+}
 
+void setupWebServer() {  
   // Print local IP address and start web server   
   server.on("/", handle_root);
-  // server.on("/buttons", handle_buttons);
   server.on("/btn", HTTP_POST, handle_btn);
   server.on("/saveconfig", HTTP_POST, handle_savecfg);
   server.on("/ota", handle_ota);
@@ -253,7 +243,6 @@ void setupWifi() {
   server.on("/restart", handle_restart);  
   server.on("/hadiscoveryon", handle_publishHaDiscovery);
   server.on("/hadiscoveryoff", handle_unpublishHaDiscovery);  
-  // server.on("/events", handle_SSE);
   server.on("/powerevents", handle_powerSSE);
   server.on("/longevents", handle_longSSE);
   server.on("/shortevents", handle_shortSSE);
@@ -263,29 +252,26 @@ void setupWifi() {
 
   server.begin();
   Serial.println("\033[1;32mHTTP Server started\033[0m");
+}
 
+void setupMqtt() {
   // Init MQTT Client
-  mac = WiFi.macAddress(); // MAC Adresse holen NACHDEM WLAN verbunden ist
+  mac = WiFi.macAddress(); 
   mac.replace(":", "");
-  deviceId = "delorean_" + mac.substring(mac.length() - 4);
-  ipUniqueId = deviceId + "_ip";
-
-  motionUniqueId = deviceId + "_motion";  
+  deviceId = "delorean_" + mac.substring(mac.length() - 4);  
+  
   mqttDeviceConfigTopic = String(mqtt_ha_topic) + "/device/" + deviceId + "/config";
   ipStateTopic = "stat/" + deviceId + "/ip";
   motionStateTopic = "stat/" + deviceId + "/motion";
   servoStateTopic = "stat/" + deviceId + "/servo";
-  shortUniqueId = deviceId + "_short";
   shortcmndTopic = "cmnd/" + deviceId + "/short";
-  longUniqueId = deviceId + "_long";
   longcmndTopic = "cmnd/" + deviceId + "/long";
-  powerUniqueId = deviceId + "_switch";
   powerStateTopic = "stat/" + deviceId + "/switch";
   powerCommandTopic = "cmnd/" + deviceId + "/switch";
   
   mqttClient.setServer(mqtt_server, String(mqtt_port).toInt());
   mqttClient.setCallback(mqttCallback);  
-  mqttClient.setBufferSize(2176);
+  mqttClient.setBufferSize(MSG_BUFFER_SIZE);
 }
 
 void setup() {
@@ -304,9 +290,12 @@ void setup() {
   digitalWrite(StatusIndicator, StatusIndicatorState);
 
   pinMode(eqModOnly, INPUT_PULLUP);
-  rxinput = digitalRead(eqModOnly);
-
-  if (rxinput == 1) setupWifi();
+  if (digitalRead(eqModOnly) == 1) {
+    setupReadConfig();
+    setupWifi();
+    setupMqtt();
+    setupWebServer();
+  }
 
   // Check if is something connected to SDA (D4)
   pinMode(D4, OUTPUT);
@@ -340,27 +329,15 @@ void handle_ota() {
   server.sendContent("");
 }
 
-// void handle_buttons() {
-//   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-//   server.send(200, "text/html", sendButtonHTMLHead());
-//   server.sendContent(sendHTMLButtons());    
-//   server.sendContent(""); 
-// }
-
 void PushButton() {
-  //if (timeoutTimeButton > 0) {
   if ((startTimeButton == 0) && (timeoutTimeButton > 0)) {      
-    // TimeOutButton = millis() + timeoutTimeButton;
     startTimeButton = millis();
     pushbuttonState = LOW;    
-    //timeoutTimeButton = 0;
     digitalWrite(pushbutton, pushbuttonState);    
-  //}  else if (millis() > TimeOutButton) {
   }  else if (millis() > (startTimeButton + timeoutTimeButton)) {     
     pushbuttonState = HIGH;    
     timeoutTimeButton = 0;
     startTimeButton = 0;
-    // TimeOutButton = 0;
     digitalWrite(pushbutton, pushbuttonState);    
   }
 }
@@ -389,7 +366,6 @@ void handle_btn() {
     if (btnPin == "1") {
       Serial.println("power on/off");    
       if (!DeloreanIsFlying) {
-        //poweronoffState = evaluate_btn_state(btnState);
         poweronoffState = evaluate_btn_state(powerButton);
         digitalWrite(poweronoff, poweronoffState);
         httpResponse = "power " ;
@@ -399,16 +375,14 @@ void handle_btn() {
     } else if (btnPin == "2") {      
       timeoutTimeButton = btnState.toInt();
       Serial.println("press "+String(timeoutTimeButton)+" ms"); 
-      // pushbuttonState = LOW;
       PushButton();
       httpResponse = btnState;
     } else {
       Serial.println("btn unknow: "+btnPin);
     }
   }
-  //server.sendHeader("Location", "/buttons",true);    
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  // server.send(302, "text/plain", "");
+
   if (DeloreanIsFlying) {
     server.send(409, "text/plain", "Conflict: Delorean is flying");
     server.sendContent("");
@@ -459,15 +433,6 @@ void handle_ap() {
   delay(5000);
 }
 
-void handle_upd() {
-  WiFiManager wifiManager;
-  wifiManager.startWebPortal();  
-
-  server.sendHeader("Location", "/",true);  
-  server.send(302, "text/plain", "");
-  Serial.println("Start Config");  
-}
-
 void handle_restart() {
   server.sendHeader("Location", "/",true);  
   server.send(302, "text/plain", "");
@@ -504,21 +469,6 @@ void handle_unpublishHaDiscovery() {
   unpublishHADiscoveryConfig();        
 }
 
-// void handle_SSE() {
-//    WiFiClient client = server.client();
-  
-//   if (client) {    
-//     serverSentEventHeader(client);    
-//     serverSentEvent(client);      
-
-//     // give the web browser time to receive the data
-//     delay(10); // round about 60 messages per second            
-    
-//     // close the connection:
-//     client.stop();
-//   }
-// }
-
 void handle_powerSSE() {
   WiFiClient client = server.client();
   
@@ -527,7 +477,7 @@ void handle_powerSSE() {
     serverSentPowerEvent(client);      
 
     // give the web browser time to receive the data
-    delay(10); // round about 60 messages per second            
+    delay(10); // round about 100 messages per second            
     
     // close the connection:
     client.stop();
@@ -542,7 +492,7 @@ void handle_longSSE() {
     serverSentLongEvent(client);      
 
     // give the web browser time to receive the data
-    delay(10); // round about 60 messages per second            
+    delay(10); // round about 100 messages per second            
     
     // close the connection:
     client.stop();
@@ -557,7 +507,7 @@ void handle_shortSSE() {
     serverSentShortEvent(client);      
 
     // give the web browser time to receive the data
-    delay(10); // round about 60 messages per second            
+    delay(10); // round about 100 messages per second            
     
     // close the connection:
     client.stop();
@@ -571,18 +521,6 @@ void serverSentEventHeader(WiFiClient client) {
   client.println("Connection: close");  // the connection will be closed after completion of the response
   client.println();
 }
-
-void serverSentEventErrorHeader(WiFiClient client) {
-  client.println("HTTP/1.1 409 Conflict");
-  client.println("Connection: close");  // the connection will be closed after completion of the response
-  client.println();
-}
-
-// void serverSentEvent(WiFiClient client) {
-//   String Output = "data: " + String(poweronoffState ? "ON" : "OFF");
-//   client.println(Output);
-//   client.println();
-// }
 
 void serverSentPowerEvent(WiFiClient client) {
   String Output = "data: " + String(poweronoffState ? "ON" : "OFF");
@@ -831,42 +769,6 @@ String sendHTMLHead() {
   return ptr;
 }
 
-// String sendButtonHTMLHead() {
-//   String ptr = "<!DOCTYPE html> <html>\n";
-  
-//   ptr += "<head>";
-  
-//   ptr += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-
-//   ptr += "<title>Flying Delorean Did3D</title>\n";
-  
-//   ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
-//   ptr += "body{margin-top: 25px; background-color: black;} h1 {color: #444444;margin: 50px auto 30px;} h3 {color: #444444;margin-bottom: 50px;} form {margin-bottom: 30px;} img{max-width:300px;}\n";  
-//   ptr += ".button {display: block;width: 80px;background-color: #deea26;border: none;text-decoration: none;font-size: 25px;margin: auto;cursor: pointer;border-radius: 4px;}\n";
-//   ptr += ".button-off {background-color: #7F151A;color: black;}\n";
-//   ptr += ".button-off:active {background-color: #7F151A;color: black;}\n";
-//   ptr += ".button-on {background-color: #cb2129;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-on:active {background-color: #A01B21;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-short {background-color: #70f74f;color: black;}\n";
-//   ptr += ".button-short:active {background-color: #56bc3c;color: black;}\n";
-//   ptr += ".button-short-off {background-color: #70f74f;color: black;}\n";
-//   ptr += ".button-short-off:active {background-color: #70f74f;color: black;}\n";
-//   ptr += ".button-short-on {background-color: #56bc3c;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-short-on:active {background-color: #60ce42;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-long {background-color: #dfc048;color: black;}\n";
-//   ptr += ".button-long:active {background-color: #b59a3b;color: black;}\n";
-//   ptr += ".button-long-off {background-color: #dfc048;color: black;}\n";
-//   ptr += ".button-long-off:active {background-color: #dfc048;color: black;}\n";
-//   ptr += ".button-long-on {background-color: #b59a3b;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-long-on:active {background-color: #ccac43;color: white; text-shadow: 0px 0px 10px white; box-shadow: 0px 0px 10px white; }\n";
-//   ptr += ".button-reset {background-color: black;color: #7f94a1;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
-//   ptr += ".button-reset:active {background-color: #black;color: blue;position: absolute;bottom: 125px;left: 25px;font-size: 12px}\n";
-//   ptr += "p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
-//   ptr += "</style>\n";
-//   ptr += "</head>\n";
-//   return ptr;
-// }
-
 String sendConfigHTMLBody() {
   String ptr = "<body>\n";    
   ptr += sendHTMLMenu();   
@@ -912,7 +814,6 @@ String sendConfigHTMLBody() {
   ptr += "<script type=\"text/javascript\">\n";  
   ptr += "const apMode = document.querySelector(\".button-ap\");\n";
   ptr += "apMode.addEventListener(\"click\", () => {";
-  //ptr += "if(confirm('After the reset, you must connect to the AP again and reconfigure everything! Do you really want to reset the entire configuration?'))";
   ptr += "if(confirm('This activates the Wifi access point. You must then connect to the \"Flying Delorean\" AP and go to http://192.168.4.1. You can then adjust the Wifi settings. Do you want to activate the AP mode now?'))";
   ptr += "window.location.href=\"/apmode\";})\n";  
   ptr += "</script>\n";
@@ -960,7 +861,7 @@ String sendHTMLMenu() {
 
 String sendHTMLFooter() {  
   String ptr = "<p><img src=\"/Did3d.webp\" alt=\"Did3D.fr\" class=\"did3d\" width=\"32\" height=\"32\"></p>\n";
-  ptr += "<div class=\"swversion\">v. " + swversion + "</div>";
+  ptr += "<div class=\"swversion\">v. " + String(swversion) + "</div>";
   return ptr;
 }
 
@@ -1000,16 +901,6 @@ String sendHTMLota() {
   return ptr;
 }
 
-// String sendHTMLButtons() {
-//   String ptr = "<body>\n";    
-//   ptr +=  build_btn_form("1", poweronoffState); 
-//   ptr += build_push_btn_form("Scene", "short", 1000);
-//   ptr += build_push_btn_form("Mode", "long", 3100);
-//   ptr += "</body>\n";
-//   ptr += "</html>\n";
-//   return ptr;
-// }
-
 void drawmatrix(const uint8_t bmp[], const uint8_t inv_bmp[]) {     
   if (MatrixConnected) {  
     //matrix.clear();
@@ -1029,7 +920,7 @@ void matrixloop() {
     clearmatrix();
     return;
   } 
-  if (millis() - previousBitmapTime >= timeoutTime) {    
+  if (millis() - previousBitmapTime >= 200) {    
     previousBitmapTime = millis();   
     if (MatrixConnected) {
       matrix.setRotation(1);              
@@ -1159,8 +1050,8 @@ void mqttloop()
 }
 
 void publishRssiStateChange() {
-  if ((rssi <= WiFi.RSSI() -4 ) || (rssi >= WiFi.RSSI() +4)) { 
-    rssi = WiFi.RSSI();
+  if ((wifiRssi <= WiFi.RSSI() -4 ) || (wifiRssi >= WiFi.RSSI() +4)) { 
+    wifiRssi = WiFi.RSSI();
     publishRssiState();
   }
 }
@@ -1179,127 +1070,126 @@ void CheckInputs() {
     poweronoffState = newPoweronoffState;
     publishPowerState();
   }
-  
-  LastDeloreanIsFlying = DeloreanIsFlying;
+    
   ServoValue = pulseIn(PulseInPin, HIGH, 100000);
   if (LastServoValue != ServoValue) {
     publishServoState();
     LastServoValue = ServoValue;
   }
   
-  DeloreanIsFlying = ServoValue > 0;
-  if (LastDeloreanIsFlying != DeloreanIsFlying) {
+  if (DeloreanIsFlying != (ServoValue > 0)) {
+    DeloreanIsFlying = ServoValue > 0;
     Serial.println("DeloreanIsFlying = " + String(DeloreanIsFlying));
     publishMotionState();
   }  
 }
 
 void mqttHaDiscoveryConfig() {  
-  StaticJsonDocument<2176> doc; 
-  JsonObject device = doc.createNestedObject("dev"); // Device
-  JsonArray identifiers = device.createNestedArray("ids");
+  StaticJsonDocument<MSG_BUFFER_SIZE> doc; 
+  JsonObject jsonDevice = doc.createNestedObject("dev"); // Device
+  JsonArray identifiers = jsonDevice.createNestedArray("ids");
   identifiers.add(deviceId); 
-  //device["ids"] = deviceId;
-  device["name"] = deviceName;  
-  device["model"] = "Wifi Controller for Did3D Flying DELOREAN";
-  device["mf"] = "sequ3ster";  
-  device["sn"] = ESP.getChipId();
+  jsonDevice["name"] = "Flying Delorean";  
+  jsonDevice["model"] = "Wifi Controller for Did3D Flying DELOREAN";
+  jsonDevice["mf"] = "sequ3ster";  
+  jsonDevice["sn"] = ESP.getChipId();
 
   #ifdef ESP8266
-    device["hw"] = "ESP8266 " + String(ESP.getFlashChipSize()/1048576) + " MB";
+    jsonDevice["hw"] = "ESP8266 " + String(ESP.getFlashChipSize()/1048576) + " MB";
   #endif
 
   #ifdef ESP32
-    device["hw"] = "ESP32 " + String(ESP.getFlashChipSize()/1048576) + " MB";
+    jsonDevice["hw"] = "ESP32 " + String(ESP.getFlashChipSize()/1048576) + " MB";
   #endif
 
-  device["sw"] = swversion;  
-  device["cu"] = "http://" + ipAddress.toString();
+  jsonDevice["sw"] = String(swversion);  
+  jsonDevice["cu"] = "http://" + WiFi.localIP().toString();
 
-  JsonObject origin = doc.createNestedObject("o"); // Origin
-  origin["name"] = "delorean2mqtt";
-  origin["sw"] = "0.8";
-  origin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
+  JsonObject jsonOrigin = doc.createNestedObject("o"); // Origin
+  jsonOrigin["name"] = "delorean2mqtt";
+  jsonOrigin["sw"] = String(swversion);
+  jsonOrigin["url"] = "https://github.com/sequ3ster/esp_flying_delorean";
   
   JsonObject components = doc.createNestedObject("cmps"); // Components
-  JsonObject power = components.createNestedObject(powerUniqueId);
-  power["p"] = "switch"; // Platform  
-  power["name"] = "Power";
-  power["cmd_t"] = powerCommandTopic;  
-  power["stat_t"] = powerStateTopic;
-  power["uniq_id"] = powerUniqueId;
+  JsonObject jsonPowerBtn = components.createNestedObject(deviceId + "_switch");
+  jsonPowerBtn["p"] = "switch"; 
+  jsonPowerBtn["name"] = "Power";
+  jsonPowerBtn["cmd_t"] = powerCommandTopic;  
+  jsonPowerBtn["stat_t"] = powerStateTopic;
+  jsonPowerBtn["uniq_id"] = deviceId + "_switch";
 
-  JsonObject shortbtn = components.createNestedObject(shortUniqueId);
-  shortbtn["p"] = "button"; // Platform  
-  shortbtn["name"] = "Scene";
-  shortbtn["cmd_t"] = shortcmndTopic;  
-  shortbtn["uniq_id"] = shortUniqueId;
+  JsonObject jsonShortBtn = components.createNestedObject(deviceId + "_short");
+  jsonShortBtn["p"] = "button"; 
+  jsonShortBtn["name"] = "Scene";
+  jsonShortBtn["cmd_t"] = shortcmndTopic;  
+  jsonShortBtn["uniq_id"] = deviceId + "_short";
 
-  JsonObject longbtn = components.createNestedObject(longUniqueId);
-  longbtn["p"] = "button"; // Platform  
-  longbtn["name"] = "Mode";
-  longbtn["cmd_t"] = longcmndTopic;
-  longbtn["uniq_id"] = longUniqueId;
+  JsonObject jsonLongBtn = components.createNestedObject(deviceId + "_long");
+  jsonLongBtn["p"] = "button"; 
+  jsonLongBtn["name"] = "Mode";
+  jsonLongBtn["cmd_t"] = longcmndTopic;
+  jsonLongBtn["uniq_id"] = deviceId + "_long";
   
-  JsonObject motion = components.createNestedObject(motionUniqueId);
-  motion["p"] = "binary_sensor"; //Platform
-  motion["name"] = "Motion";  
-  motion["stat_t"] = motionStateTopic;
-  motion["uniq_id"] = motionUniqueId;
-  //motion["pl_on"] = "true";
-  //motion["pl_on"] = 1;
-  //motion["val_tpl"] = "{{ motion(value) }}";
+  JsonObject jsonMotion = components.createNestedObject(deviceId + "_motion");
+  jsonMotion["p"] = "binary_sensor"; 
+  jsonMotion["name"] = "Motion";  
+  jsonMotion["stat_t"] = motionStateTopic;
+  jsonMotion["uniq_id"] = deviceId + "_motion";
+  jsonMotion["ic"] = "mdi:airplane";
+  jsonMotion["pl_on"] = "on";
+  jsonMotion["pl_off"] = "off";
 
-  JsonObject servo = components.createNestedObject(motionUniqueId);
-  servo["p"] = "sensor"; //Platform
-  servo["name"] = "Servo";  
-  servo["stat_t"] = servoStateTopic;
-  servo["uniq_id"] = deviceId + "_servo";  
-  servo["unit_of_meas"] = "°";
+  JsonObject jsonServo = components.createNestedObject(deviceId + "_servo");
+  jsonServo["p"] = "sensor"; 
+  jsonServo["name"] = "Servo";  
+  jsonServo["stat_t"] = servoStateTopic;
+  jsonServo["ic"] = "mdi:turbine";
+  jsonServo["uniq_id"] = deviceId + "_servo";  
+  jsonServo["unit_of_meas"] = "°";
 
-  JsonObject macadd = components.createNestedObject(deviceId + "_mac");
-  macadd["p"] = "sensor"; //Platform
-  macadd["name"] = "MAC Address";  
-  macadd["ent_cat"] = "diagnostic";
-  macadd["ic"] = "mdi:network-pos";  
-  macadd["stat_t"] = "stat/" + deviceId + "/mac";
-  macadd["uniq_id"] = deviceId + "_mac";
+  JsonObject jsonMacAdd = components.createNestedObject(deviceId + "_mac");
+  jsonMacAdd["p"] = "sensor"; 
+  jsonMacAdd["name"] = "MAC Address";  
+  jsonMacAdd["ent_cat"] = "diagnostic";
+  jsonMacAdd["ic"] = "mdi:network-pos";  
+  jsonMacAdd["stat_t"] = "stat/" + deviceId + "/mac";
+  jsonMacAdd["uniq_id"] = deviceId + "_mac";
 
-  JsonObject bssid = components.createNestedObject(deviceId + "_bssid");
-  bssid["p"] = "sensor"; //Platform
-  bssid["name"] = "Wifi BSSID";  
-  bssid["ent_cat"] = "diagnostic";
-  bssid["ic"] = "mdi:network-pos";  
-  bssid["stat_t"] = "stat/" + deviceId + "/bssid";
-  bssid["uniq_id"] = deviceId + "_bssid";
+  JsonObject jsonBssid = components.createNestedObject(deviceId + "_bssid");
+  jsonBssid["p"] = "sensor"; 
+  jsonBssid["name"] = "Wifi BSSID";  
+  jsonBssid["ent_cat"] = "diagnostic";
+  jsonBssid["ic"] = "mdi:network-pos";  
+  jsonBssid["stat_t"] = "stat/" + deviceId + "/bssid";
+  jsonBssid["uniq_id"] = deviceId + "_bssid";
 
-  JsonObject ipadd = components.createNestedObject(ipUniqueId);
-  ipadd["p"] = "sensor"; //Platform
-  ipadd["name"] = "IP Address";  
-  ipadd["ent_cat"] = "diagnostic";
-  ipadd["ic"] = "mdi:ip-network";
-  ipadd["stat_t"] = ipStateTopic;
-  ipadd["uniq_id"] = ipUniqueId;
+  JsonObject jsonIpadd = components.createNestedObject(deviceId + "_ip");
+  jsonIpadd["p"] = "sensor"; 
+  jsonIpadd["name"] = "IP Address";  
+  jsonIpadd["ent_cat"] = "diagnostic";
+  jsonIpadd["ic"] = "mdi:ip-network";
+  jsonIpadd["stat_t"] = ipStateTopic;
+  jsonIpadd["uniq_id"] = deviceId + "_ip";
 
-  JsonObject hostname = components.createNestedObject(deviceId + "_host");
-  hostname["p"] = "sensor"; //Platform
-  hostname["name"] = "Hostname";  
-  hostname["ent_cat"] = "diagnostic";
-  hostname["ic"] = "mdi:lan-connect";  
-  hostname["stat_t"] = "stat/" + deviceId + "/hostname";
-  hostname["uniq_id"] = deviceId + "_host";
+  JsonObject jsonHostname = components.createNestedObject(deviceId + "_host");
+  jsonHostname["p"] = "sensor"; 
+  jsonHostname["name"] = "Hostname";  
+  jsonHostname["ent_cat"] = "diagnostic";
+  jsonHostname["ic"] = "mdi:lan-connect";  
+  jsonHostname["stat_t"] = "stat/" + deviceId + "/hostname";
+  jsonHostname["uniq_id"] = deviceId + "_host";
 
-  JsonObject rssi = components.createNestedObject(deviceId + "_rssi");
-  rssi["p"] = "sensor"; //Platform
-  rssi["name"] = "Wifi RSSI";  
-  rssi["ent_cat"] = "diagnostic";
-  rssi["ic"] = "mdi:wifi";
-  rssi["unit_of_meas"] = "db";
-  rssi["stat_t"] = "stat/" + deviceId + "/rssi";
-  rssi["uniq_id"] = deviceId + "_rssi";
+  JsonObject jsonRssi = components.createNestedObject(deviceId + "_rssi");
+  jsonRssi["p"] = "sensor"; 
+  jsonRssi["name"] = "Wifi RSSI";  
+  jsonRssi["ent_cat"] = "diagnostic";
+  jsonRssi["ic"] = "mdi:wifi";
+  jsonRssi["unit_of_meas"] = "db";
+  jsonRssi["stat_t"] = "stat/" + deviceId + "/rssi";
+  jsonRssi["uniq_id"] = deviceId + "_rssi";
 
   JsonObject ssid = components.createNestedObject(deviceId + "_ssid");
-  ssid["p"] = "sensor"; //Platform
+  ssid["p"] = "sensor"; 
   ssid["name"] = "Wifi SSID";  
   ssid["ent_cat"] = "diagnostic";
   ssid["ic"] = "mdi:router-network-wireless";  
@@ -1307,7 +1197,7 @@ void mqttHaDiscoveryConfig() {
   ssid["uniq_id"] = deviceId + "_ssid";
 
   JsonObject freeram = components.createNestedObject(deviceId + "_freeram");
-  freeram["p"] = "sensor"; //Platform
+  freeram["p"] = "sensor"; 
   freeram["name"] = "Free RAM";  
   freeram["ent_cat"] = "diagnostic";
   freeram["ic"] = "mdi:memory";
@@ -1448,16 +1338,17 @@ void publishFreeRamState() {
 void publishMotionState() {
   if(!mqttClient.connected()) return;
 
-  StaticJsonDocument<30> doc;
-  doc["motion"] = DeloreanIsFlying;
+  // StaticJsonDocument<30> doc;
+  // doc["motion"] = DeloreanIsFlying;
 
-  String output = (DeloreanIsFlying ? "true" : "false");
+  String output = (DeloreanIsFlying ? "on" : "off");
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(motionStateTopic);
   Serial.println("\033[1;37m \033[44m " + String(DeloreanIsFlying) + " \033[0m");
 
-  if (!mqttClient.publish(motionStateTopic.c_str(), String(DeloreanIsFlying).c_str(), true)) {    
+  //if (!mqttClient.publish(motionStateTopic.c_str(), String(DeloreanIsFlying).c_str(), true)) {    
+  if (!mqttClient.publish(motionStateTopic.c_str(), output.c_str(), true)) {  
      Serial.println("\033[1;31mMQTT Failed to publish states!\033[0m");
   }  
 }
@@ -1465,11 +1356,11 @@ void publishMotionState() {
 void publishServoState() {
   if(!mqttClient.connected()) return;
 
-  StaticJsonDocument<30> doc;
-  doc["servo"] = ServoValue;
+  // StaticJsonDocument<30> doc;
+  // doc["servo"] = ServoValue;
 
-  String output;
-  serializeJson(doc, output);
+  // String output;
+  // serializeJson(doc, output);
 
   Serial.print("\033[1;34mMQTT Publishing State to: \033[0m");
   Serial.print(servoStateTopic);
@@ -1524,9 +1415,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void loop() {    
-  rxinput = digitalRead(eqModOnly);
-
-  if (rxinput == 1) {
+  if (digitalRead(eqModOnly) == 1) {
     CheckInputs();  
     server.handleClient();      
     PushButton();
