@@ -32,5 +32,5 @@ This is why the on/off button on the website and the mqtt power switch do not wo
 <br><br>
 
 **Home Assistant**
-<br><img src="/images/Screenshot_20250427_221001_Home Assistant.jpg" width="300">
+<br><img src="/images/Screenshot_20250427_221001_Home Assistant.jpg" width="750">
 <br><br>
